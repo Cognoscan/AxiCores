@@ -718,6 +718,9 @@ wire [63:0] EMIOGPIOTN; //output
 ///////////////////////////////////////////////////////////////////////////
 
 // MAXIGP0
+assign MAXIGP0ACLK = m_axi_gp0.ACLK;
+assign MAXIGP0ARESETN = m_axi_gp0.ARESETn;
+
 // Write Address Channel
 assign m_axi_gp0.AWID     = MAXIGP0AWID;
 assign m_axi_gp0.AWADDR   = MAXIGP0AWADDR;

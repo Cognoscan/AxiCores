@@ -1,24 +1,16 @@
-package axi3_types;
+package axi4_types;
 
     // Burst Size (ARSIZE and AWSIZE)
-    // Most interfaces only use 2 bits
-    typedef enum logic [1:0] {
-        BURST_SIZE_1   = 2'b00,
-        BURST_SIZE_2   = 2'b01,
-        BURST_SIZE_4   = 2'b10,
-        BURST_SIZE_8   = 2'b11
-    } burst_size_t;
-    // But AXI3 Standard officially lists 3-bit burst size words
     typedef enum logic [2:0] {
-        BURST_SIZE_BIG_1   = 3'b000,
-        BURST_SIZE_BIG_2   = 3'b001,
-        BURST_SIZE_BIG_4   = 3'b010,
-        BURST_SIZE_BIG_8   = 3'b011,
-        BURST_SIZE_BIG_16  = 3'b100,
-        BURST_SIZE_BIG_32  = 3'b101,
-        BURST_SIZE_BIG_64  = 3'b110,
-        BURST_SIZE_BIG_128 = 3'b111
-    } burst_size_big_t;
+        BURST_SIZE_1   = 3'b000,
+        BURST_SIZE_2   = 3'b001,
+        BURST_SIZE_4   = 3'b010,
+        BURST_SIZE_8   = 3'b011,
+        BURST_SIZE_16  = 3'b100,
+        BURST_SIZE_32  = 3'b101,
+        BURST_SIZE_64  = 3'b110,
+        BURST_SIZE_128 = 3'b111
+    } burst_size_t;
 
     // Burst Types (ARBURST and AWBURST)
     typedef enum logic [1:0] {
