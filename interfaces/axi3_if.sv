@@ -66,7 +66,7 @@ logic                 BREADY; ///< Response ready
 // AXI3 Read Address Channel
 /**************************************************************************/
 
-logic    [ID_WIDTH_:0] ARID;    ///< Read address ID
+logic  [ID_WIDTH_-1:0] ARID;    ///< Read address ID
 logic [ADDR_WIDTH-1:0] ARADDR;  ///< Read address
 logic            [3:0] ARLEN;   ///< Burst length
 logic            [1:0] ARSIZE;  ///< Burst size
