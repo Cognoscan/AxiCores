@@ -12,15 +12,15 @@ module adder_subtractor
     parameter LATENCY               = 1,                     ///< Latency - 0,1, or 2
     parameter B_CONSTANT            = "FALSE",               ///< Use Constant Input instead of B - "TRUE" or "FALSE"
     parameter B_VALUE               = 000000000000000,       ///< Constant Value for B
-    parameter CE                    = "TRUE"                ///< Use Clock Enable (CE) - "TRUE"or "FALSE"
-    parameter C_IN                  = "FALSE",               ///< Use Carry In (C_IN) - "TRUE"or "FALSE"
-    parameter C_OUT                 = "FALSE",               ///< Use Carry_Out (C_OUT) - "TRUE"or "FALSE"
+    parameter CE_EN                 = "TRUE",                ///< Use Clock Enable (CE) - "TRUE"or "FALSE"
+    parameter C_IN_EN               = "FALSE",               ///< Use Carry In (C_IN) - "TRUE"or "FALSE"
+    parameter C_OUT_EN              = "FALSE",               ///< Use Carry_Out (C_OUT) - "TRUE"or "FALSE"
     parameter BORROW_SENSE          = "ACTIVE_LOW",          ///< Borrow In/Out Sense - "ACTIVE_LOW"or "ACTIVE_HIGH"
-    parameter SCLR                  = "FALSE",               ///< Use Synchronous Clear (SCLR) - "TRUE"or "FALSE"
-    parameter SSET                  = "FALSE",               ///< Use Synchronous Set (SSET) - "TRUE" or "FALSE"
-    parameter SINIT                 = "FALSE",               ///< Use Synchronous Init (SINIT) - "TRUE" or "FALSE"
+    parameter SCLR_EN               = "FALSE",               ///< Use Synchronous Clear (SCLR) - "TRUE"or "FALSE"
+    parameter SSET_EN               = "FALSE",               ///< Use Synchronous Set (SSET) - "TRUE" or "FALSE"
+    parameter SINIT_EN              = "FALSE",               ///< Use Synchronous Init (SINIT) - "TRUE" or "FALSE"
     parameter SINIT_VALUE           = 0,                     ///< Init Value for output (Hex)
-    parameter BYPASS                = "FALSE",               ///< Use bypass (BYPASS) - "TRUE" or "FALSE"
+    parameter BYPASS_EN             = "FALSE",               ///< Use bypass (BYPASS) - "TRUE" or "FALSE"
     parameter BYPASS_SENSE          = "ACTIVE_HIGH",         ///< Bypass Sense - "ACTIVE_HIGH" or "ACTIVE_LOW"
     parameter SYNC_CTRL_PRIORITY    = "RESET_OVERRIDES_SET", ///< Synchronous Set and Clear (Reset) Priority - "RESET_OVERRIDES_SET" or "SET_OVERRIDES_RESET"
     parameter SYNC_CE_PRIORITY      = "SYNC_OVERRIDES_CE",   ///< Synchronous Controls and Clock Enable (CE) - "SYNC_OVERRIDES_CE" or "CE_OVERRIDES_SYNC"
@@ -84,9 +84,7 @@ initial begin
         $display("Attribute Syntax Error : The Attribute B_CONSTANT on adder_subtractor instance %m is set to %s.  Legal values for this attribute are TRUE or FALSE.", B_CONSTANT);
         $finish();
     end
-
-
-
+end
 
 
 endmodule

@@ -18,8 +18,8 @@ interface axi3_if
     parameter ID_WIDTH   = 4   ///< Width of ID signals
 )
 (
-    input ACLK,   ///< Global clock signal
-    input ARESETn ///< Global reset signal, active LOW
+    input logic ACLK,   ///< Global clock signal
+    input logic ARESETn ///< Global reset signal, active LOW
 );
 
 // We can't have 0-sized signals, so make them 1 bit and assume nothing attached
@@ -121,7 +121,7 @@ modport master (
     output WLAST,
     output WVALID,
     input  WREADY,
-    // Write Resposne Channel
+    // Write Response Channel
     input  BID,
     input  BRESP,
     input  BVALID,
@@ -171,7 +171,7 @@ modport slave (
     input  WLAST,
     input  WVALID,
     output WREADY,
-    // Write Resposne Channel
+    // Write Response Channel
     output BID,
     output BRESP,
     output BVALID,

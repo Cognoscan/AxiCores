@@ -5,6 +5,8 @@
 # Ignore complied directories
 boostdsp/
 boostdsp_tb/
+build/
+xsim.dir/
 
 # Ignore Doxygen output
 doc/html/

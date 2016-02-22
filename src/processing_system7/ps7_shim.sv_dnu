@@ -1,0 +1,253 @@
+/**
+# PS7 Shim #
+
+Base module the provides the bare minimum of interfacing to the processor. Use 
+this as the basis for a shim module between ps7_wrapper and the next higher 
+level of logic.
+
+*/
+
+///////////////////////////////////////////////////////////////////////////
+// Module Declaration {{{
+///////////////////////////////////////////////////////////////////////////
+module ps7_shim
+(
+    // Dedicated PS Signal Pins
+    inout logic PS_CLK,
+    inout logic PS_POR_B,
+    inout logic PS_SRST_B,
+    ddr_if.controller ddr,
+    inout  wire [53:0] MIO
+);
+
+// FCLK
+logic [3:0] fclk_CLK;      ///< Generated clocks for use by FPGA logic
+logic [3:0] fclk_CLKTRIGN; ///< Disables related clock if set (may not be implemented)
+logic [3:0] fclk_RESETN;   ///< Asynchronous resets loosely related to FCLK outputs
+
+/// Central Interconnect Clock Disable
+logic FPGAIDLEN; ///< input: Assert to let central interconnect clocks to shut off is all conditions are met
+
+// EVENT
+logic [1:0] event_STANDBYWFE; ///< output: Asserted when CPU waiting for an event
+logic [1:0] event_STANDBYWFI; ///< output: Asserted when CPU waiting for interrupt
+input  logic event_EVENTI;           ///< Causes CPUs to wake from WFE state
+output logic event_EVENTO;           ///< Asserted when a CPU has exectued the SEV instruction
+
+// AXI3 Bus Masters
+axi3_if.master m_axi_gp0; ///< Master GP0 - 32-bit data, 32-bit address, 12-bit ID
+axi3_if.master m_axi_gp1; ///< Master GP0 - 32-bit data, 32-bit address, 12-bit ID
+
+// AXI3 ACP Bus Slave
+axi3_if.slave s_axi_acp; ///< Slave ACP - 64-bit data, 32-bit address, 3-bit ID
+logic [4:0] s_axi_acp_awuser; ///< input: Slave ACP - User pins to inform Snoop Control Unit
+logic [4:0] s_axi_acp_aruser; ///< input: Slave ACP - User pins to inform Snoop Control Unit
+
+// AXI3 Bus Slaves
+axi3_if.slave s_axi_gp0; ///< Slave GP0 - 32-bit data, 32-bit address, 6-bit ID
+axi3_if.slave s_axi_gp1; ///< Slave GP1 - 32-bit data, 32-bit address, 6-bit ID
+axi3_if.slave s_axi_hp0; ///< Slave HP0 - 64-bit data, 32-bit address, 6-bit ID
+axi3_if.slave s_axi_hp1; ///< Slave HP1 - 64-bit data, 32-bit address, 6-bit ID
+axi3_if.slave s_axi_hp2; ///< Slave HP2 - 64-bit data, 32-bit address, 6-bit ID
+axi3_if.slave s_axi_hp3; ///< Slave HP3 - 64-bit data, 32-bit address, 6-bit ID
+
+// AXI3 Bus Slave FIFO Interfaces
+axi_hp_fifo_if.slave s_axi_hp0_fifo; ///< Slave HP0 - FIFO Control
+axi_hp_fifo_if.slave s_axi_hp1_fifo; ///< Slave HP1 - FIFO Control
+axi_hp_fifo_if.slave s_axi_hp2_fifo; ///< Slave HP2 - FIFO Control
+axi_hp_fifo_if.slave s_axi_hp3_fifo; ///< Slave HP3 - FIFO Control
+
+// DMA Peripheral Request Interfaces
+dma_req_if.zynq dma0; ///< DMA0 request interface
+dma_req_if.zynq dma1; ///< DMA1 request interface
+dma_req_if.zynq dma2; ///< DMA2 request interface
+dma_req_if.zynq dma3; ///< DMA3 request interface
+
+// Interrupt Lines
+logic [19:0] IRQF2P; ///< input: Interrupts for processor
+logic [28:0] IRQP2F; ///< output: Interrupts for programmable logic
+
+/// EMIO
+/// Ethernet
+logic    eth0_ext_int_in; ///< input: Ethernet MAC 0 External interrupt
+logic    eth1_ext_int_in; ///< input: Ethernet MAC 1 External interrupt
+gmii_if.mac     eth0;            ///< Ethernet MAC 0 GMII Interface
+gmii_if.mac     eth1;            ///< Ethernet MAC 1 GMII Interface
+ieee1588_if.mac ptp_eth0;        ///< Ethernet MAC 0 PTP output signals
+ieee1588_if.mac ptp_eth1;        ///< Ethernet MAC 1 PTP output signals
+/// JTAG
+jtag.device pjtag; ///< JTAG interface
+/// I2C
+i2c_if.device i2c0; ///< I2C Peripheral 0
+i2c_if.device i2c1; ///< I2C Peripheral 1
+/// SDIO
+sdio_if.master sdio0; ///< SDIO Peripheral 0
+sdio_if.master sdio1; ///< SDIO Peripheral 1
+/// SPI
+spi_if.device spi0; ///< SPI Peripheral 0
+spi_if.device spi1; ///< SPI Peripheral 1
+/// UART
+uart_if.device uart0; ///< UART Peripheral 0
+uart_if.device uart1; ///< UART Peripheral 1
+/// Triple-Timer Counter
+logic [2:0] ttc0_CLK; ///< input: Triple-Timer Counter clock
+logic [2:0] ttc0_WAVE; ///< output: Triple-Timer Counter wave output
+logic [2:0] ttc1_CLK; ///< input: Triple-Timer Counter clock
+logic [2:0] ttc1_WAVE; ///< output: Triple-Timer Counter wave output
+/// CAN0
+logic can0_RX; ///< input  
+logic can0_TX; ///< output 
+/// CAN1
+input  logic can1_RX; ///< input
+output logic can1_TX; ///< output
+/// GPIO
+input  logic [63:0] gpio_I; ///< input
+output logic [63:0] gpio_O; ///< output
+output logic [63:0] gpio_TN; ///< output
+/// USB0
+logic [1:0] usb0_PORTINDCTL; ///< output: Port indicator
+input  logic usb0_VBUSPWRFAULT;     ///< input: High for USB power fault
+output logic usb0_VBUSPWRSELECT;    ///< output: Bit to select between system power and external USB power
+/// USB1
+logic [1:0] usb1_PORTINDCTL; ///< output: Port indicator
+input  logic usb1_VBUSPWRFAULT;     ///< input: High for USB power fault
+output logic usb1_VBUSPWRSELECT;    ///< output: Bit to select between system power and external USB power
+/// WDT - Watchdog Timer
+logic wdt_CLKI; ///< input: Clock input for timer
+logic wdt_RSTO; ///< output: Output reset signal
+
+logic sram_int_in; ///< input: SRAM Interrupt in
+
+/// Debugging Interfaces
+logic [31:0] ftm_debug_f2p; ///< input: Debugging general-purpose inputs from FPGA
+logic [31:0] ftm_debug_p2f; ///< output: Debugging general-purpose outputs to FPGA
+ftm_trigger_if.processor ftm_trigger; ///< Triggers
+ftm_trace_if.processor ftm_trace; ///< Trace logic
+logic [31:0] trace_DATA; ///< output: Trace data
+logic trace_CLK;         ///< input: Trace clock
+logic trace_CTL;         ///< output: Trace control
+
+
+
+assign fclk_CLKTRIGN = 4'b0000;
+
+
+ps7_wrapper ps7
+(
+    // Dedicated PS Signal Pins
+    inout logic PS_CLK,
+    inout logic PS_POR_B,
+    inout logic PS_SRST_B,
+    ddr_if.controller ddr,
+    inout  wire [53:0] MIO,
+
+    // FCLK
+    output logic [3:0] fclk_CLK,      ///< Generated clocks for use by FPGA logic
+    input  logic [3:0] fclk_CLKTRIGN, ///< Disables related clock if set (may not be implemented)
+    output logic [3:0] fclk_RESETN,   ///< Asynchronous resets loosely related to FCLK outputs
+
+    /// Central Interconnect Clock Disable
+    input  logic FPGAIDLEN, ///< Assert to let central interconnect clocks to shut off is all conditions are met
+
+    // EVENT
+    output logic [1:0] event_STANDBYWFE, ///< Asserted when CPU waiting for an event
+    output logic [1:0] event_STANDBYWFI, ///< Asserted when CPU waiting for interrupt
+    input  logic event_EVENTI,           ///< Causes CPUs to wake from WFE state
+    output logic event_EVENTO,           ///< Asserted when a CPU has exectued the SEV instruction
+
+    // AXI3 Bus Masters
+    axi3_if.master m_axi_gp0, ///< Master GP0 - 32-bit data, 32-bit address, 12-bit ID
+    axi3_if.master m_axi_gp1, ///< Master GP0 - 32-bit data, 32-bit address, 12-bit ID
+
+    // AXI3 ACP Bus Slave
+    axi3_if.slave s_axi_acp, ///< Slave ACP - 64-bit data, 32-bit address, 3-bit ID
+    input [4:0] s_axi_acp_awuser, ///< Slave ACP - User pins to inform Snoop Control Unit
+    input [4:0] s_axi_acp_aruser, ///< Slave ACP - User pins to inform Snoop Control Unit
+
+    // AXI3 Bus Slaves
+    axi3_if.slave s_axi_gp0, ///< Slave GP0 - 32-bit data, 32-bit address, 6-bit ID
+    axi3_if.slave s_axi_gp1, ///< Slave GP1 - 32-bit data, 32-bit address, 6-bit ID
+    axi3_if.slave s_axi_hp0, ///< Slave HP0 - 64-bit data, 32-bit address, 6-bit ID
+    axi3_if.slave s_axi_hp1, ///< Slave HP1 - 64-bit data, 32-bit address, 6-bit ID
+    axi3_if.slave s_axi_hp2, ///< Slave HP2 - 64-bit data, 32-bit address, 6-bit ID
+    axi3_if.slave s_axi_hp3, ///< Slave HP3 - 64-bit data, 32-bit address, 6-bit ID
+
+    // AXI3 Bus Slave FIFO Interfaces
+    axi_hp_fifo_if.slave s_axi_hp0_fifo, ///< Slave HP0 - FIFO Control
+    axi_hp_fifo_if.slave s_axi_hp1_fifo, ///< Slave HP1 - FIFO Control
+    axi_hp_fifo_if.slave s_axi_hp2_fifo, ///< Slave HP2 - FIFO Control
+    axi_hp_fifo_if.slave s_axi_hp3_fifo, ///< Slave HP3 - FIFO Control
+
+    // DMA Peripheral Request Interfaces
+    dma_req_if.zynq dma0, ///< DMA0 request interface
+    dma_req_if.zynq dma1, ///< DMA1 request interface
+    dma_req_if.zynq dma2, ///< DMA2 request interface
+    dma_req_if.zynq dma3, ///< DMA3 request interface
+
+    // Interrupt Lines
+    [19:0] IRQF2P; ///< input: Interrupts for processor
+    [28:0] IRQP2F; ///< output: Interrupts for programmable logic
+
+    /// EMIO
+    /// Ethernet
+    input  logic    eth0_ext_int_in, ///< Ethernet MAC 0 External interrupt
+    input  logic    eth1_ext_int_in, ///< Ethernet MAC 1 External interrupt
+    gmii_if.mac     eth0,            ///< Ethernet MAC 0 GMII Interface
+    gmii_if.mac     eth1,            ///< Ethernet MAC 1 GMII Interface
+    ieee1588_if.mac ptp_eth0,        ///< Ethernet MAC 0 PTP output signals
+    ieee1588_if.mac ptp_eth1,        ///< Ethernet MAC 1 PTP output signals
+    /// JTAG
+    jtag.device pjtag, ///< JTAG interface
+    /// I2C
+    i2c_if.device i2c0, ///< I2C Peripheral 0
+    i2c_if.device i2c1, ///< I2C Peripheral 1
+    /// SDIO
+    sdio_if.master sdio0, ///< SDIO Peripheral 0
+    sdio_if.master sdio1, ///< SDIO Peripheral 1
+    /// SPI
+    spi_if.device spi0, ///< SPI Peripheral 0
+    spi_if.device spi1, ///< SPI Peripheral 1
+    /// UART
+    uart_if.device uart0, ///< UART Peripheral 0
+    uart_if.device uart1, ///< UART Peripheral 1
+    /// Triple-Timer Counter
+    input  logic [2:0] ttc0_CLK, ///< Triple-Timer Counter clock
+    output logic [2:0] ttc0_WAVE, ///< Triple-Timer Counter wave output
+    input  logic [2:0] ttc1_CLK, ///< Triple-Timer Counter clock
+    output logic [2:0] ttc1_WAVE, ///< Triple-Timer Counter wave output
+    /// CAN0
+    input  logic can0_RX,
+    output logic can0_TX,
+    /// CAN1
+    input  logic can1_RX,
+    output logic can1_TX,
+    /// GPIO
+    input  logic [63:0] gpio_I,
+    output logic [63:0] gpio_O,
+    output logic [63:0] gpio_TN,
+    /// USB0
+    output logic [1:0] usb0_PORTINDCTL, ///< Port indicator
+    input  logic usb0_VBUSPWRFAULT,     ///< High for USB power fault
+    output logic usb0_VBUSPWRSELECT,    ///< Bit to select between system power and external USB power
+    /// USB1
+    output logic [1:0] usb1_PORTINDCTL, ///< Port indicator
+    input  logic usb1_VBUSPWRFAULT,     ///< High for USB power fault
+    output logic usb1_VBUSPWRSELECT,    ///< Bit to select between system power and external USB power
+    /// WDT - Watchdog Timer
+    input  wdt_CLKI, ///< Clock input for timer
+    output wdt_RSTO, ///< Output reset signal
+
+    input  logic sram_int_in, ///< SRAM Interrupt in
+
+    /// Debugging Interfaces
+    input  logic [31:0] ftm_debug_f2p, ///< Debugging general-purpose inputs from FPGA
+    output logic [31:0] ftm_debug_p2f, ///< Debugging general-purpose outputs to FPGA
+    ftm_trigger_if.processor ftm_trigger, ///< Triggers
+    ftm_trace_if.processor ftm_trace, ///< Trace logic
+    output logic [31:0] trace_DATA, ///< Trace data
+    input  logic trace_CLK,         ///< Trace clock
+    output logic trace_CTL,         ///< Trace control
+
+);
+
+endmodule

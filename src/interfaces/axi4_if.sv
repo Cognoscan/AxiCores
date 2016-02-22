@@ -15,8 +15,8 @@ interface axi4_if
     parameter RUSER_WIDTH  = 0  ///< Width of read data user signal
 )
 (
-    input ACLK, ///< Global clock signal
-    input ARESETn ///< Global reset signal, active LOW
+    input logic ACLK, ///< Global clock signal
+    input logic ARESETn ///< Global reset signal, active LOW
 );
 
 // We can't have 0-sized signals, so make them 1 bit and assume nothing attached
@@ -133,7 +133,7 @@ modport master (
     output WUSER,
     output WVALID,
     input  WREADY,
-    // Write Resposne Channel
+    // Write Response Channel
     input  BID,
     input  BRESP,
     input  BUSER,
@@ -190,7 +190,7 @@ modport slave (
     input  WUSER,
     input  WVALID,
     output WREADY,
-    // Write Resposne Channel
+    // Write Response Channel
     output BID,
     output BRESP,
     output BUSER,

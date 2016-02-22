@@ -3,17 +3,46 @@
 
 Wraps the PS7 primitive using SystemVerilog Interfaces, making for a much more 
 manageable netlist.
+
+Although the port list is more compact, it is still recommended that a shim 
+module be used, such that the rest of the system only sees the necessary ports. 
+An example is included as ps7_shim.sv.
 */
+
+///////////////////////////////////////////////////////////////////////////
+// Module Declaration {{{
+///////////////////////////////////////////////////////////////////////////
 module ps7_wrapper
 (
+    // Dedicated PS Signal Pins
+    inout logic PS_CLK,
+    inout logic PS_POR_B,
+    inout logic PS_SRST_B,
+    ddr_if.controller ddr,
+    inout  wire [53:0] MIO,
+
+    // FCLK
+    output logic [3:0] fclk_CLK,      ///< Generated clocks for use by FPGA logic
+    input  logic [3:0] fclk_CLKTRIGN, ///< Disables related clock if set (may not be implemented)
+    output logic [3:0] fclk_RESETN,   ///< Asynchronous resets loosely related to FCLK outputs
+
+    /// Central Interconnect Clock Disable
+    input  logic FPGAIDLEN, ///< Assert to let central interconnect clocks to shut off is all conditions are met
+
+    // EVENT
+    output logic [1:0] event_STANDBYWFE, ///< Asserted when CPU waiting for an event
+    output logic [1:0] event_STANDBYWFI, ///< Asserted when CPU waiting for interrupt
+    input  logic event_EVENTI,           ///< Causes CPUs to wake from WFE state
+    output logic event_EVENTO,           ///< Asserted when a CPU has exectued the SEV instruction
+
     // AXI3 Bus Masters
     axi3_if.master m_axi_gp0, ///< Master GP0 - 32-bit data, 32-bit address, 12-bit ID
     axi3_if.master m_axi_gp1, ///< Master GP0 - 32-bit data, 32-bit address, 12-bit ID
 
     // AXI3 ACP Bus Slave
-    axi3_if.slave s_axi_acp, ///< Slave ACP - 64-bit data, 32-bit address, 3-bit ID
-    input [4:0] s_axi_acp_awuser, ///< Slave ACP - User pins to inform Snoop Control Unit
-    input [4:0] s_axi_acp_aruser, ///< Slave ACP - User pins to inform Snoop Control Unit
+    axi3_if.slave s_axi_acp,             ///< Slave ACP - 64-bit data, 32-bit address, 3-bit ID
+    input  logic [4:0] s_axi_acp_awuser, ///< Slave ACP - User pins to inform Snoop Control Unit
+    input  logic [4:0] s_axi_acp_aruser, ///< Slave ACP - User pins to inform Snoop Control Unit
 
     // AXI3 Bus Slaves
     axi3_if.slave s_axi_gp0, ///< Slave GP0 - 32-bit data, 32-bit address, 6-bit ID
@@ -33,319 +62,73 @@ module ps7_wrapper
     dma_req_if.zynq dma0, ///< DMA0 request interface
     dma_req_if.zynq dma1, ///< DMA1 request interface
     dma_req_if.zynq dma2, ///< DMA2 request interface
-    dma_req_if.zynq dma3  ///< DMA3 request interface
+    dma_req_if.zynq dma3, ///< DMA3 request interface
+
+    // Interrupt Lines
+    input  logic [19:0] IRQF2P, ///< Interrupts for processor
+    output logic [28:0] IRQP2F, ///< Interrupts for programmable logic
+
+    /// EMIO
+    /// Ethernet
+    input  logic    eth0_ext_int_in, ///< Ethernet MAC 0 External interrupt
+    input  logic    eth1_ext_int_in, ///< Ethernet MAC 1 External interrupt
+    gmii_if.mac     eth0,            ///< Ethernet MAC 0 GMII Interface
+    gmii_if.mac     eth1,            ///< Ethernet MAC 1 GMII Interface
+    ieee1588_if.mac ptp_eth0,        ///< Ethernet MAC 0 PTP output signals
+    ieee1588_if.mac ptp_eth1,        ///< Ethernet MAC 1 PTP output signals
+    /// JTAG
+    jtag.device pjtag, ///< JTAG interface
+    /// I2C
+    i2c_if.device i2c0, ///< I2C Peripheral 0
+    i2c_if.device i2c1, ///< I2C Peripheral 1
+    /// SDIO
+    sdio_if.master sdio0, ///< SDIO Peripheral 0
+    sdio_if.master sdio1, ///< SDIO Peripheral 1
+    /// SPI
+    spi_if.device spi0, ///< SPI Peripheral 0
+    spi_if.device spi1, ///< SPI Peripheral 1
+    /// UART
+    uart_if.device uart0, ///< UART Peripheral 0
+    uart_if.device uart1, ///< UART Peripheral 1
+    /// Triple-Timer Counter
+    input  logic [2:0] ttc0_CLK, ///< Triple-Timer Counter clock
+    output logic [2:0] ttc0_WAVE, ///< Triple-Timer Counter wave output
+    input  logic [2:0] ttc1_CLK, ///< Triple-Timer Counter clock
+    output logic [2:0] ttc1_WAVE, ///< Triple-Timer Counter wave output
+    /// CAN0
+    input  logic can0_RX,
+    output logic can0_TX,
+    /// CAN1
+    input  logic can1_RX,
+    output logic can1_TX,
+    /// GPIO
+    input  logic [63:0] gpio_I,
+    output logic [63:0] gpio_O,
+    output logic [63:0] gpio_TN,
+    /// USB0
+    output logic [1:0] usb0_PORTINDCTL, ///< Port indicator
+    input  logic usb0_VBUSPWRFAULT,     ///< High for USB power fault
+    output logic usb0_VBUSPWRSELECT,    ///< Bit to select between system power and external USB power
+    /// USB1
+    output logic [1:0] usb1_PORTINDCTL, ///< Port indicator
+    input  logic usb1_VBUSPWRFAULT,     ///< High for USB power fault
+    output logic usb1_VBUSPWRSELECT,    ///< Bit to select between system power and external USB power
+    /// WDT - Watchdog Timer
+    input  logic wdt_CLKI, ///< Clock input for timer
+    output logic wdt_RSTO, ///< Output reset signal
+
+    input  logic sram_int_in, ///< SRAM Interrupt in
+
+    /// Debugging Interfaces
+    input  logic [31:0] ftm_debug_f2p, ///< Debugging general-purpose inputs from FPGA
+    output logic [31:0] ftm_debug_p2f, ///< Debugging general-purpose outputs to FPGA
+    ftm_trigger_if.processor ftm_trigger, ///< Triggers
+    ftm_trace_if.processor ftm_trace, ///< Trace logic
+    output logic [31:0] trace_DATA, ///< Trace data
+    input  logic trace_CLK,         ///< Trace clock
+    output logic trace_CTL          ///< Trace control
 
 );
-
-// }}}
-///////////////////////////////////////////////////////////////////////////
-// Signal Declarations {{{
-///////////////////////////////////////////////////////////////////////////
-
-// DDR
-wire [31:0] DDRDQ; //inout
-wire [14:0] DDRA; //inout
-wire [3:0] DDRARB; //input
-wire [3:0] DDRDM; //inout
-wire [3:0] DDRDQSN; //inout
-wire [3:0] DDRDQSP; //inout
-wire [2:0] DDRBA; //inout
-wire DDRCASB; //inout
-wire DDRCKE; //inout
-wire DDRCKN; //inout
-wire DDRCKP; //inout
-wire DDRCSB; //inout
-wire DDRDRSTB; //inout
-wire DDRODT; //inout
-wire DDRRASB; //inout
-wire DDRVRN; //inout
-wire DDRVRP; //inout
-wire DDRWEB; //inout
-
-// DMA0
-wire [1:0] DMA0DATYPE; //output
-wire [1:0] DMA0DRTYPE; //input
-wire DMA0ACLK; //input
-wire DMA0DAREADY; //input
-wire DMA0DAVALID; //output
-wire DMA0DRLAST; //input
-wire DMA0DRREADY; //output
-wire DMA0DRVALID; //input
-wire DMA0RSTN; //output
-
-// DMA1
-wire [1:0] DMA1DATYPE; //output
-wire [1:0] DMA1DRTYPE; //input
-wire DMA1ACLK; //input
-wire DMA1DAREADY; //input
-wire DMA1DAVALID; //output
-wire DMA1DRLAST; //input
-wire DMA1DRREADY; //output
-wire DMA1DRVALID; //input
-wire DMA1RSTN; //output
-
-// DMA2
-wire [1:0] DMA2DATYPE; //output
-wire [1:0] DMA2DRTYPE; //input
-wire DMA2ACLK; //input
-wire DMA2DAREADY; //input
-wire DMA2DAVALID; //output
-wire DMA2DRLAST; //input
-wire DMA2DRREADY; //output
-wire DMA2DRVALID; //input
-wire DMA2RSTN; //output
-
-// DMA3
-wire [1:0] DMA3DATYPE; //output
-wire [1:0] DMA3DRTYPE; //input
-wire DMA3ACLK; //input
-wire DMA3DAREADY; //input
-wire DMA3DAVALID; //output
-wire DMA3DRLAST; //input
-wire DMA3DRREADY; //output
-wire DMA3DRVALID; //input
-wire DMA3RSTN; //output
-
-// EMIOCAN0
-wire EMIOCAN0PHYRX; //input
-wire EMIOCAN0PHYTX; //output
-
-// EMIOCAN1
-wire EMIOCAN1PHYRX; //input
-wire EMIOCAN1PHYTX; //output
-
-// EMIOENET0
-wire [7:0] EMIOENET0GMIIRXD; //input
-wire [7:0] EMIOENET0GMIITXD; //output
-wire EMIOENET0EXTINTIN; //input
-wire EMIOENET0GMIICOL; //input
-wire EMIOENET0GMIICRS; //input
-wire EMIOENET0GMIIRXCLK; //input
-wire EMIOENET0GMIIRXDV; //input
-wire EMIOENET0GMIIRXER; //input
-wire EMIOENET0GMIITXCLK; //input
-wire EMIOENET0GMIITXEN; //output
-wire EMIOENET0GMIITXER; //output
-wire EMIOENET0MDIOI; //input
-wire EMIOENET0MDIOMDC; //output
-wire EMIOENET0MDIOO; //output
-wire EMIOENET0MDIOTN; //output
-wire EMIOENET0PTPDELAYREQRX; //output
-wire EMIOENET0PTPDELAYREQTX; //output
-wire EMIOENET0PTPPDELAYREQRX; //output
-wire EMIOENET0PTPPDELAYREQTX; //output
-wire EMIOENET0PTPPDELAYRESPRX; //output
-wire EMIOENET0PTPPDELAYRESPTX; //output
-wire EMIOENET0PTPSYNCFRAMERX; //output
-wire EMIOENET0PTPSYNCFRAMETX; //output
-wire EMIOENET0SOFRX; //output
-wire EMIOENET0SOFTX; //output
-
-// EMIOENET1
-wire [7:0] EMIOENET1GMIIRXD; //input
-wire [7:0] EMIOENET1GMIITXD; //output
-wire EMIOENET1EXTINTIN; //input
-wire EMIOENET1GMIICOL; //input
-wire EMIOENET1GMIICRS; //input
-wire EMIOENET1GMIIRXCLK; //input
-wire EMIOENET1GMIIRXDV; //input
-wire EMIOENET1GMIIRXER; //input
-wire EMIOENET1GMIITXCLK; //input
-wire EMIOENET1GMIITXEN; //output
-wire EMIOENET1GMIITXER; //output
-wire EMIOENET1MDIOI; //input
-wire EMIOENET1MDIOMDC; //output
-wire EMIOENET1MDIOO; //output
-wire EMIOENET1MDIOTN; //output
-wire EMIOENET1PTPDELAYREQRX; //output
-wire EMIOENET1PTPDELAYREQTX; //output
-wire EMIOENET1PTPPDELAYREQRX; //output
-wire EMIOENET1PTPPDELAYREQTX; //output
-wire EMIOENET1PTPPDELAYRESPRX; //output
-wire EMIOENET1PTPPDELAYRESPTX; //output
-wire EMIOENET1PTPSYNCFRAMERX; //output
-wire EMIOENET1PTPSYNCFRAMETX; //output
-wire EMIOENET1SOFRX; //output
-wire EMIOENET1SOFTX; //output
-
-// EMIOI2C0
-wire EMIOI2C0SCLI; //input
-wire EMIOI2C0SCLO; //output
-wire EMIOI2C0SCLTN; //output
-wire EMIOI2C0SDAI; //input
-wire EMIOI2C0SDAO; //output
-wire EMIOI2C0SDATN; //output
-
-// EMIOI2C1
-wire EMIOI2C1SCLI; //input
-wire EMIOI2C1SCLO; //output
-wire EMIOI2C1SCLTN; //output
-wire EMIOI2C1SDAI; //input
-wire EMIOI2C1SDAO; //output
-wire EMIOI2C1SDATN; //output
-
-// EMIOPJTAG
-wire EMIOPJTAGTCK; //input
-wire EMIOPJTAGTDI; //input
-wire EMIOPJTAGTDO; //output
-wire EMIOPJTAGTDTN; //output
-wire EMIOPJTAGTMS; //input
-
-// EMIOSDIO0
-wire [3:0] EMIOSDIO0DATAI; //input
-wire [3:0] EMIOSDIO0DATAO; //output
-wire [3:0] EMIOSDIO0DATATN; //output
-wire [2:0] EMIOSDIO0BUSVOLT; //output
-wire EMIOSDIO0BUSPOW; //output
-wire EMIOSDIO0CDN; //input
-wire EMIOSDIO0CLK; //output
-wire EMIOSDIO0CLKFB; //input
-wire EMIOSDIO0CMDI; //input
-wire EMIOSDIO0CMDO; //output
-wire EMIOSDIO0CMDTN; //output
-wire EMIOSDIO0LED; //output
-wire EMIOSDIO0WP; //input
-
-// EMIOSDIO1
-wire [3:0] EMIOSDIO1DATAI; //input
-wire [3:0] EMIOSDIO1DATAO; //output
-wire [3:0] EMIOSDIO1DATATN; //output
-wire [2:0] EMIOSDIO1BUSVOLT; //output
-wire EMIOSDIO1BUSPOW; //output
-wire EMIOSDIO1CDN; //input
-wire EMIOSDIO1CLK; //output
-wire EMIOSDIO1CLKFB; //input
-wire EMIOSDIO1CMDI; //input
-wire EMIOSDIO1CMDO; //output
-wire EMIOSDIO1CMDTN; //output
-wire EMIOSDIO1LED; //output
-wire EMIOSDIO1WP; //input
-
-// EMIOSPI0
-wire [2:0] EMIOSPI0SSON; //output
-wire EMIOSPI0MI; //input
-wire EMIOSPI0MO; //output
-wire EMIOSPI0MOTN; //output
-wire EMIOSPI0SCLKI; //input
-wire EMIOSPI0SCLKO; //output
-wire EMIOSPI0SCLKTN; //output
-wire EMIOSPI0SI; //input
-wire EMIOSPI0SO; //output
-wire EMIOSPI0SSIN; //input
-wire EMIOSPI0SSNTN; //output
-wire EMIOSPI0STN; //output
-
-// EMIOSPI1
-wire [2:0] EMIOSPI1SSON; //output
-wire EMIOSPI1MI; //input
-wire EMIOSPI1MO; //output
-wire EMIOSPI1MOTN; //output
-wire EMIOSPI1SCLKI; //input
-wire EMIOSPI1SCLKO; //output
-wire EMIOSPI1SCLKTN; //output
-wire EMIOSPI1SI; //input
-wire EMIOSPI1SO; //output
-wire EMIOSPI1SSIN; //input
-wire EMIOSPI1SSNTN; //output
-wire EMIOSPI1STN; //output
-
-// EMIO Misc
-wire EMIOSRAMINTIN; //input
-
-// EMIOTRACE
-wire [31:0] EMIOTRACEDATA; //output
-wire EMIOTRACECLK; //input
-wire EMIOTRACECTL; //output
-
-// EMIOUART0
-wire EMIOUART0CTSN; //input
-wire EMIOUART0DCDN; //input
-wire EMIOUART0DSRN; //input
-wire EMIOUART0DTRN; //output
-wire EMIOUART0RIN; //input
-wire EMIOUART0RTSN; //output
-wire EMIOUART0RX; //input
-wire EMIOUART0TX; //output
-
-// EMIOUART1
-wire EMIOUART1CTSN; //input
-wire EMIOUART1DCDN; //input
-wire EMIOUART1DSRN; //input
-wire EMIOUART1DTRN; //output
-wire EMIOUART1RIN; //input
-wire EMIOUART1RTSN; //output
-wire EMIOUART1RX; //input
-wire EMIOUART1TX; //output
-
-// EMIOUSB0
-wire [1:0] EMIOUSB0PORTINDCTL; //output
-wire EMIOUSB0VBUSPWRFAULT; //input
-wire EMIOUSB0VBUSPWRSELECT; //output
-
-// EMIOUSB0
-wire [1:0] EMIOUSB1PORTINDCTL; //output
-wire EMIOUSB1VBUSPWRFAULT; //input
-wire EMIOUSB1VBUSPWRSELECT; //output
-
-wire EMIOWDTCLKI; //input
-wire EMIOWDTRSTO; //output
-
-// EVENT
-wire [1:0] EVENTSTANDBYWFE; //output
-wire [1:0] EVENTSTANDBYWFI; //output
-wire EVENTEVENTI; //input
-wire EVENTEVENTO; //output
-
-wire FPGAIDLEN; //input
-
-// FTM
-wire [31:0] FTMDTRACEINDATA; //input
-wire [31:0] FTMTF2PDEBUG; //input
-wire [31:0] FTMTP2FDEBUG; //output
-wire [3:0] FTMDTRACEINATID; //input
-wire [3:0] FTMTF2PTRIG; //input
-wire [3:0] FTMTF2PTRIGACK; //output
-wire [3:0] FTMTP2FTRIG; //output
-wire [3:0] FTMTP2FTRIGACK; //input
-wire FTMDTRACEINCLOCK; //input
-wire FTMDTRACEINVALID; //input
-
-// PS
-wire PSCLK; //inout
-wire PSPORB; //inout
-wire PSSRSTB; //inout
-
-wire [19:0] IRQF2P; //input
-
-wire [28:0] IRQP2F; //output
-
-// EMIOTTC0
-wire [2:0] EMIOTTC0CLKI; //input
-wire [2:0] EMIOTTC0WAVEO; //output
-
-// EMIOTTC1
-wire [2:0] EMIOTTC1CLKI; //input
-wire [2:0] EMIOTTC1WAVEO; //output
-
-// FCLK
-wire [3:0] FCLKCLK; //output
-wire [3:0] FCLKCLKTRIGN; //input
-wire [3:0] FCLKRESETN; //output
-
-wire [53:0] MIO; //inout
-
-// EMIOGPIO
-wire [63:0] EMIOGPIOI; //input
-wire [63:0] EMIOGPIOO; //output
-wire [63:0] EMIOGPIOTN; //output
-
-// }}}
-///////////////////////////////////////////////////////////////////////////
-// Signal Bundling into Interfaces {{{
-///////////////////////////////////////////////////////////////////////////
-
-// MAXIGP0
-// MAXIGP1
 
 // }}}
 ///////////////////////////////////////////////////////////////////////////
@@ -369,94 +152,94 @@ PS7 processor (
   .DMA3DAVALID(dma3.DAVALID),
   .DMA3DRREADY(dma3.DRREADY),
   .DMA3RSTN(dma3.RSTN),
-  .EMIOCAN0PHYTX(EMIOCAN0PHYTX),
-  .EMIOCAN1PHYTX(EMIOCAN1PHYTX),
-  .EMIOENET0GMIITXD(EMIOENET0GMIITXD),
-  .EMIOENET0GMIITXEN(EMIOENET0GMIITXEN),
-  .EMIOENET0GMIITXER(EMIOENET0GMIITXER),
-  .EMIOENET0MDIOMDC(EMIOENET0MDIOMDC),
-  .EMIOENET0MDIOO(EMIOENET0MDIOO),
-  .EMIOENET0MDIOTN(EMIOENET0MDIOTN),
-  .EMIOENET0PTPDELAYREQRX(EMIOENET0PTPDELAYREQRX),
-  .EMIOENET0PTPDELAYREQTX(EMIOENET0PTPDELAYREQTX),
-  .EMIOENET0PTPPDELAYREQRX(EMIOENET0PTPPDELAYREQRX),
-  .EMIOENET0PTPPDELAYREQTX(EMIOENET0PTPPDELAYREQTX),
-  .EMIOENET0PTPPDELAYRESPRX(EMIOENET0PTPPDELAYRESPRX),
-  .EMIOENET0PTPPDELAYRESPTX(EMIOENET0PTPPDELAYRESPTX),
-  .EMIOENET0PTPSYNCFRAMERX(EMIOENET0PTPSYNCFRAMERX),
-  .EMIOENET0PTPSYNCFRAMETX(EMIOENET0PTPSYNCFRAMETX),
-  .EMIOENET0SOFRX(EMIOENET0SOFRX),
-  .EMIOENET0SOFTX(EMIOENET0SOFTX),
-  .EMIOENET1GMIITXD(EMIOENET1GMIITXD),
-  .EMIOENET1GMIITXEN(EMIOENET1GMIITXEN),
-  .EMIOENET1GMIITXER(EMIOENET1GMIITXER),
-  .EMIOENET1MDIOMDC(EMIOENET1MDIOMDC),
-  .EMIOENET1MDIOO(EMIOENET1MDIOO),
-  .EMIOENET1MDIOTN(EMIOENET1MDIOTN),
-  .EMIOENET1PTPDELAYREQRX(EMIOENET1PTPDELAYREQRX),
-  .EMIOENET1PTPDELAYREQTX(EMIOENET1PTPDELAYREQTX),
-  .EMIOENET1PTPPDELAYREQRX(EMIOENET1PTPPDELAYREQRX),
-  .EMIOENET1PTPPDELAYREQTX(EMIOENET1PTPPDELAYREQTX),
-  .EMIOENET1PTPPDELAYRESPRX(EMIOENET1PTPPDELAYRESPRX),
-  .EMIOENET1PTPPDELAYRESPTX(EMIOENET1PTPPDELAYRESPTX),
-  .EMIOENET1PTPSYNCFRAMERX(EMIOENET1PTPSYNCFRAMERX),
-  .EMIOENET1PTPSYNCFRAMETX(EMIOENET1PTPSYNCFRAMETX),
-  .EMIOENET1SOFRX(EMIOENET1SOFRX),
-  .EMIOENET1SOFTX(EMIOENET1SOFTX),
-  .EMIOGPIOO(EMIOGPIOO),
-  .EMIOGPIOTN(EMIOGPIOTN),
-  .EMIOI2C0SCLO(EMIOI2C0SCLO),
-  .EMIOI2C0SCLTN(EMIOI2C0SCLTN),
-  .EMIOI2C0SDAO(EMIOI2C0SDAO),
-  .EMIOI2C0SDATN(EMIOI2C0SDATN),
-  .EMIOI2C1SCLO(EMIOI2C1SCLO),
-  .EMIOI2C1SCLTN(EMIOI2C1SCLTN),
-  .EMIOI2C1SDAO(EMIOI2C1SDAO),
-  .EMIOI2C1SDATN(EMIOI2C1SDATN),
-  .EMIOPJTAGTDO(EMIOPJTAGTDO),
-  .EMIOPJTAGTDTN(EMIOPJTAGTDTN),
-  .EMIOSDIO0BUSPOW(EMIOSDIO0BUSPOW),
-  .EMIOSDIO0BUSVOLT(EMIOSDIO0BUSVOLT),
-  .EMIOSDIO0CLK(EMIOSDIO0CLK),
-  .EMIOSDIO0CMDO(EMIOSDIO0CMDO),
-  .EMIOSDIO0CMDTN(EMIOSDIO0CMDTN),
-  .EMIOSDIO0DATAO(EMIOSDIO0DATAO),
-  .EMIOSDIO0DATATN(EMIOSDIO0DATATN),
-  .EMIOSDIO0LED(EMIOSDIO0LED),
-  .EMIOSDIO1BUSPOW(EMIOSDIO1BUSPOW),
-  .EMIOSDIO1BUSVOLT(EMIOSDIO1BUSVOLT),
-  .EMIOSDIO1CLK(EMIOSDIO1CLK),
-  .EMIOSDIO1CMDO(EMIOSDIO1CMDO),
-  .EMIOSDIO1CMDTN(EMIOSDIO1CMDTN),
-  .EMIOSDIO1DATAO(EMIOSDIO1DATAO),
-  .EMIOSDIO1DATATN(EMIOSDIO1DATATN),
-  .EMIOSDIO1LED(EMIOSDIO1LED),
-  .EMIOSPI0MO(EMIOSPI0MO),
-  .EMIOSPI0MOTN(EMIOSPI0MOTN),
-  .EMIOSPI0SCLKO(EMIOSPI0SCLKO),
-  .EMIOSPI0SCLKTN(EMIOSPI0SCLKTN),
-  .EMIOSPI0SO(EMIOSPI0SO),
-  .EMIOSPI0SSNTN(EMIOSPI0SSNTN),
-  .EMIOSPI0SSON(EMIOSPI0SSON),
-  .EMIOSPI0STN(EMIOSPI0STN),
-  .EMIOSPI1MO(EMIOSPI1MO),
-  .EMIOSPI1MOTN(EMIOSPI1MOTN),
-  .EMIOSPI1SCLKO(EMIOSPI1SCLKO),
-  .EMIOSPI1SCLKTN(EMIOSPI1SCLKTN),
-  .EMIOSPI1SO(EMIOSPI1SO),
-  .EMIOSPI1SSNTN(EMIOSPI1SSNTN),
-  .EMIOSPI1SSON(EMIOSPI1SSON),
-  .EMIOSPI1STN(EMIOSPI1STN),
+  .EMIOCAN0PHYTX(can0_TX),
+  .EMIOCAN1PHYTX(can1_TX),
+  .EMIOENET0GMIITXD(eth0.TXD),
+  .EMIOENET0GMIITXEN(eth0.TX_EN),
+  .EMIOENET0GMIITXER(eth0.TX_ER),
+  .EMIOENET0MDIOMDC(eth0.MDIO_MDC),
+  .EMIOENET0MDIOO(eth0.MDIO_O),
+  .EMIOENET0MDIOTN(eth0.MDIO_TN),
+  .EMIOENET0PTPDELAYREQRX(ptp_eth0.DELAYREQRX),
+  .EMIOENET0PTPDELAYREQTX(ptp_eth0.DELAYREQTX),
+  .EMIOENET0PTPPDELAYREQRX(ptp_eth0.PDELAYREQRX),
+  .EMIOENET0PTPPDELAYREQTX(ptp_eth0.PDELAYREQTX),
+  .EMIOENET0PTPPDELAYRESPRX(ptp_eth0.PDELAYRESPRX),
+  .EMIOENET0PTPPDELAYRESPTX(ptp_eth0.PDELAYRESPTX),
+  .EMIOENET0PTPSYNCFRAMERX(ptp_eth0.SYNCFRAMERX),
+  .EMIOENET0PTPSYNCFRAMETX(ptp_eth0.SYNCFRAMETX),
+  .EMIOENET0SOFRX(ptp_eth0.SOFRX),
+  .EMIOENET0SOFTX(ptp_eth0.SOFTX),
+  .EMIOENET1GMIITXD(eth1.TXD),
+  .EMIOENET1GMIITXEN(eth1.TX_EN),
+  .EMIOENET1GMIITXER(eth1.TX_ER),
+  .EMIOENET1MDIOMDC(eth1.MDIO_MDC),
+  .EMIOENET1MDIOO(eth1.MDIO_O),
+  .EMIOENET1MDIOTN(eth1.MDIO_TN),
+  .EMIOENET1PTPDELAYREQRX(ptp_eth1.DELAYREQRX),
+  .EMIOENET1PTPDELAYREQTX(ptp_eth1.DELAYREQTX),
+  .EMIOENET1PTPPDELAYREQRX(ptp_eth1.PDELAYREQRX),
+  .EMIOENET1PTPPDELAYREQTX(ptp_eth1.PDELAYREQTX),
+  .EMIOENET1PTPPDELAYRESPRX(ptp_eth1.PDELAYRESPRX),
+  .EMIOENET1PTPPDELAYRESPTX(ptp_eth1.PDELAYRESPTX),
+  .EMIOENET1PTPSYNCFRAMERX(ptp_eth1.SYNCFRAMERX),
+  .EMIOENET1PTPSYNCFRAMETX(ptp_eth1.SYNCFRAMETX),
+  .EMIOENET1SOFRX(ptp_eth1.SOFRX),
+  .EMIOENET1SOFTX(ptp_eth1.SOFTX),
+  .EMIOGPIOO(gpio_O),
+  .EMIOGPIOTN(gpio_TN),
+  .EMIOI2C0SCLO(i2c0.SCLO),
+  .EMIOI2C0SCLTN(i2c0.SCLTN),
+  .EMIOI2C0SDAO(i2c0.SDAO),
+  .EMIOI2C0SDATN(i2c0.SDATN),
+  .EMIOI2C1SCLO(i2c1.SCLO),
+  .EMIOI2C1SCLTN(i2c1.SCLTN),
+  .EMIOI2C1SDAO(i2c1.SDAO),
+  .EMIOI2C1SDATN(i2c1.SDATN),
+  .EMIOPJTAGTDO(pjtag.TDO),
+  .EMIOPJTAGTDTN(pjtag.TDTN),
+  .EMIOSDIO0BUSPOW(sdio0.BUSPOW),
+  .EMIOSDIO0BUSVOLT(sdio0.BUSVOLT),
+  .EMIOSDIO0CLK(sdio0.CLK),
+  .EMIOSDIO0CMDO(sdio0.CMDO),
+  .EMIOSDIO0CMDTN(sdio0.CMDTN),
+  .EMIOSDIO0DATAO(sdio0.DATAO),
+  .EMIOSDIO0DATATN(sdio0.DATATN),
+  .EMIOSDIO0LED(sdio0.LED),
+  .EMIOSDIO1BUSPOW(sdio1.BUSPOW),
+  .EMIOSDIO1BUSVOLT(sdio1.BUSVOLT),
+  .EMIOSDIO1CLK(sdio1.CLK),
+  .EMIOSDIO1CMDO(sdio1.CMDO),
+  .EMIOSDIO1CMDTN(sdio1.CMDTN),
+  .EMIOSDIO1DATAO(sdio1.DATAO),
+  .EMIOSDIO1DATATN(sdio1.DATATN),
+  .EMIOSDIO1LED(sdio1.LED),
+  .EMIOSPI0MO(spi0.MO),
+  .EMIOSPI0MOTN(spi0.MOTN),
+  .EMIOSPI0SCLKO(spi0.SCLKO),
+  .EMIOSPI0SCLKTN(spi0.SCLKTN),
+  .EMIOSPI0SO(spi0.SO),
+  .EMIOSPI0SSNTN(spi0.SSNTN),
+  .EMIOSPI0SSON(spi0.SSON),
+  .EMIOSPI0STN(spi0.STN),
+  .EMIOSPI1MO(spi1.MO),
+  .EMIOSPI1MOTN(spi1.MOTN),
+  .EMIOSPI1SCLKO(spi1.SCLKO),
+  .EMIOSPI1SCLKTN(spi1.SCLKTN),
+  .EMIOSPI1SO(spi1.SO),
+  .EMIOSPI1SSNTN(spi1.SSNTN),
+  .EMIOSPI1SSON(spi1.SSON),
+  .EMIOSPI1STN(spi1.STN),
   .EMIOTRACECTL(EMIOTRACECTL),
   .EMIOTRACEDATA(EMIOTRACEDATA),
-  .EMIOTTC0WAVEO(EMIOTTC0WAVEO),
-  .EMIOTTC1WAVEO(EMIOTTC1WAVEO),
-  .EMIOUART0DTRN(EMIOUART0DTRN),
-  .EMIOUART0RTSN(EMIOUART0RTSN),
-  .EMIOUART0TX(EMIOUART0TX),
-  .EMIOUART1DTRN(EMIOUART1DTRN),
-  .EMIOUART1RTSN(EMIOUART1RTSN),
-  .EMIOUART1TX(EMIOUART1TX),
+  .EMIOTTC0WAVEO(ttc0_WAVE),
+  .EMIOTTC1WAVEO(ttc1_WAVE),
+  .EMIOUART0DTRN(uart0.DTRN),
+  .EMIOUART0RTSN(uart0.RTSN),
+  .EMIOUART0TX(uart0.TX),
+  .EMIOUART1DTRN(uart1.DTRN),
+  .EMIOUART1RTSN(uart1.RTSN),
+  .EMIOUART1TX(uart1.TX),
   .EMIOUSB0PORTINDCTL(EMIOUSB0PORTINDCTL),
   .EMIOUSB0VBUSPWRSELECT(EMIOUSB0VBUSPWRSELECT),
   .EMIOUSB1PORTINDCTL(EMIOUSB1PORTINDCTL),
@@ -465,11 +248,11 @@ PS7 processor (
   .EVENTEVENTO(EVENTEVENTO),
   .EVENTSTANDBYWFE(EVENTSTANDBYWFE),
   .EVENTSTANDBYWFI(EVENTSTANDBYWFI),
-  .FCLKCLK(FCLKCLK),
-  .FCLKRESETN(FCLKRESETN),
-  .FTMTF2PTRIGACK(FTMTF2PTRIGACK),
-  .FTMTP2FDEBUG(FTMTP2FDEBUG),
-  .FTMTP2FTRIG(FTMTP2FTRIG),
+  .FCLKCLK(fclk_CLK),
+  .FCLKRESETN(fclk_RESETN),
+  .FTMTF2PTRIGACK(ftm_trigger.F2PTRIGACK),
+  .FTMTP2FDEBUG(ftm_debug_p2f),
+  .FTMTP2FTRIG(ftm_trigger.P2FTRIG),
   .IRQP2F(IRQP2F),
   .MAXIGP0ARADDR(m_axi_gp0.ARADDR),
   .MAXIGP0ARBURST(m_axi_gp0.ARBURST),
@@ -628,29 +411,29 @@ PS7 processor (
   .SAXIHP3WCOUNT(s_axi_hp3_fifo.WCOUNT),
   .SAXIHP3WREADY(s_axi_hp3.WREADY),
 
-  .DDRA(DDRA),
-  .DDRBA(DDRBA),
-  .DDRCASB(DDRCASB),
-  .DDRCKE(DDRCKE),
-  .DDRCKN(DDRCKN),
-  .DDRCKP(DDRCKP),
-  .DDRCSB(DDRCSB),
-  .DDRDM(DDRDM),
-  .DDRDQ(DDRDQ),
-  .DDRDQSN(DDRDQSN),
-  .DDRDQSP(DDRDQSP),
-  .DDRDRSTB(DDRDRSTB),
-  .DDRODT(DDRODT),
-  .DDRRASB(DDRRASB),
-  .DDRVRN(DDRVRN),
-  .DDRVRP(DDRVRP),
-  .DDRWEB(DDRWEB),
+  .DDRA(ddr.A),
+  .DDRBA(ddr.BA),
+  .DDRCASB(ddr.CASB),
+  .DDRCKE(ddr.CKE),
+  .DDRCKN(ddr.CKN),
+  .DDRCKP(ddr.CKP),
+  .DDRCSB(ddr.CSB),
+  .DDRDM(ddr.DM),
+  .DDRDQ(ddr.DQ),
+  .DDRDQSN(ddr.DQSN),
+  .DDRDQSP(ddr.DQSP),
+  .DDRDRSTB(ddr.DRSTB),
+  .DDRODT(ddr.ODT),
+  .DDRRASB(ddr.RASB),
+  .DDRVRN(ddr.VRN),
+  .DDRVRP(ddr.VRP),
+  .DDRWEB(ddr.WEB),
   .MIO(MIO),
-  .PSCLK(PSCLK),
-  .PSPORB(PSPORB),
-  .PSSRSTB(PSSRSTB),
+  .PSCLK(PS_CLK),
+  .PSPORB(PS_POR_B),
+  .PSSRSTB(PS_SRST_B),
 
-  .DDRARB(DDRARB),
+  .DDRARB(ddr.ARB),
   .DMA0ACLK(dma0.ACLK),
   .DMA0DAREADY(dma0.DAREADY),
   .DMA0DRLAST(dma0.DRLAST),
@@ -671,79 +454,79 @@ PS7 processor (
   .DMA3DRLAST(dma3.DRLAST),
   .DMA3DRTYPE(dma3.DRTYPE),
   .DMA3DRVALID(dma3.DRVALID),
-  .EMIOCAN0PHYRX(EMIOCAN0PHYRX),
-  .EMIOCAN1PHYRX(EMIOCAN1PHYRX),
-  .EMIOENET0EXTINTIN(EMIOENET0EXTINTIN),
-  .EMIOENET0GMIICOL(EMIOENET0GMIICOL),
-  .EMIOENET0GMIICRS(EMIOENET0GMIICRS),
-  .EMIOENET0GMIIRXCLK(EMIOENET0GMIIRXCLK),
-  .EMIOENET0GMIIRXD(EMIOENET0GMIIRXD),
-  .EMIOENET0GMIIRXDV(EMIOENET0GMIIRXDV),
-  .EMIOENET0GMIIRXER(EMIOENET0GMIIRXER),
-  .EMIOENET0GMIITXCLK(EMIOENET0GMIITXCLK),
-  .EMIOENET0MDIOI(EMIOENET0MDIOI),
-  .EMIOENET1EXTINTIN(EMIOENET1EXTINTIN),
-  .EMIOENET1GMIICOL(EMIOENET1GMIICOL),
-  .EMIOENET1GMIICRS(EMIOENET1GMIICRS),
-  .EMIOENET1GMIIRXCLK(EMIOENET1GMIIRXCLK),
-  .EMIOENET1GMIIRXD(EMIOENET1GMIIRXD),
-  .EMIOENET1GMIIRXDV(EMIOENET1GMIIRXDV),
-  .EMIOENET1GMIIRXER(EMIOENET1GMIIRXER),
-  .EMIOENET1GMIITXCLK(EMIOENET1GMIITXCLK),
-  .EMIOENET1MDIOI(EMIOENET1MDIOI),
-  .EMIOGPIOI(EMIOGPIOI),
-  .EMIOI2C0SCLI(EMIOI2C0SCLI),
-  .EMIOI2C0SDAI(EMIOI2C0SDAI),
-  .EMIOI2C1SCLI(EMIOI2C1SCLI),
-  .EMIOI2C1SDAI(EMIOI2C1SDAI),
-  .EMIOPJTAGTCK(EMIOPJTAGTCK),
-  .EMIOPJTAGTDI(EMIOPJTAGTDI),
-  .EMIOPJTAGTMS(EMIOPJTAGTMS),
-  .EMIOSDIO0CDN(EMIOSDIO0CDN),
-  .EMIOSDIO0CLKFB(EMIOSDIO0CLKFB),
-  .EMIOSDIO0CMDI(EMIOSDIO0CMDI),
-  .EMIOSDIO0DATAI(EMIOSDIO0DATAI),
-  .EMIOSDIO0WP(EMIOSDIO0WP),
-  .EMIOSDIO1CDN(EMIOSDIO1CDN),
-  .EMIOSDIO1CLKFB(EMIOSDIO1CLKFB),
-  .EMIOSDIO1CMDI(EMIOSDIO1CMDI),
-  .EMIOSDIO1DATAI(EMIOSDIO1DATAI),
-  .EMIOSDIO1WP(EMIOSDIO1WP),
-  .EMIOSPI0MI(EMIOSPI0MI),
-  .EMIOSPI0SCLKI(EMIOSPI0SCLKI),
-  .EMIOSPI0SI(EMIOSPI0SI),
-  .EMIOSPI0SSIN(EMIOSPI0SSIN),
-  .EMIOSPI1MI(EMIOSPI1MI),
-  .EMIOSPI1SCLKI(EMIOSPI1SCLKI),
-  .EMIOSPI1SI(EMIOSPI1SI),
-  .EMIOSPI1SSIN(EMIOSPI1SSIN),
+  .EMIOCAN0PHYRX(can0_RX),
+  .EMIOCAN1PHYRX(can1_RX),
+  .EMIOENET0EXTINTIN(eth0_ext_int_in),
+  .EMIOENET0GMIICOL(eth0.COL),
+  .EMIOENET0GMIICRS(eth0.CRS),
+  .EMIOENET0GMIIRXCLK(eth0.RX_CLK),
+  .EMIOENET0GMIIRXD(eth0.RXD),
+  .EMIOENET0GMIIRXDV(eth0.RX_DV),
+  .EMIOENET0GMIIRXER(eth0.RX_ER),
+  .EMIOENET0GMIITXCLK(eth0.TX_CLK),
+  .EMIOENET0MDIOI(eth0.MDIO_I),
+  .EMIOENET1EXTINTIN(eth1_ext_int_in),
+  .EMIOENET1GMIICOL(eth1.COL),
+  .EMIOENET1GMIICRS(eth1.CRS),
+  .EMIOENET1GMIIRXCLK(eth1.RX_CLK),
+  .EMIOENET1GMIIRXD(eth1.RXD),
+  .EMIOENET1GMIIRXDV(eth1.RX_DV),
+  .EMIOENET1GMIIRXER(eth1.RX_ER),
+  .EMIOENET1GMIITXCLK(eth1.TX_CLK),
+  .EMIOENET1MDIOI(eth1.MDIO_I),
+  .EMIOGPIOI(gpio_I),
+  .EMIOI2C0SCLI(i2c0.SCLI),
+  .EMIOI2C0SDAI(i2c0.SDAI),
+  .EMIOI2C1SCLI(i2c1.SCLI),
+  .EMIOI2C1SDAI(i2c1.SDAI),
+  .EMIOPJTAGTCK(pjtag.TCK),
+  .EMIOPJTAGTDI(pjtag.TDI),
+  .EMIOPJTAGTMS(pjtag.TMS),
+  .EMIOSDIO0CDN(sdio0.CDN),
+  .EMIOSDIO0CLKFB(sdio0.CLKFB),
+  .EMIOSDIO0CMDI(sdio0.CMDI),
+  .EMIOSDIO0DATAI(sdio0.DATAI),
+  .EMIOSDIO0WP(sdio0.WP),
+  .EMIOSDIO1CDN(sdio1.CDN),
+  .EMIOSDIO1CLKFB(sdio1.CLKFB),
+  .EMIOSDIO1CMDI(sdio1.CMDI),
+  .EMIOSDIO1DATAI(sdio1.DATAI),
+  .EMIOSDIO1WP(sdio1.WP),
+  .EMIOSPI0MI(spi0.MI),
+  .EMIOSPI0SCLKI(spi0.SCLKI),
+  .EMIOSPI0SI(spi0.SI),
+  .EMIOSPI0SSIN(spi0.SSIN),
+  .EMIOSPI1MI(spi1.MI),
+  .EMIOSPI1SCLKI(spi1.SCLKI),
+  .EMIOSPI1SI(spi1.SI),
+  .EMIOSPI1SSIN(spi1.SSIN),
   .EMIOSRAMINTIN(EMIOSRAMINTIN),
   .EMIOTRACECLK(EMIOTRACECLK),
-  .EMIOTTC0CLKI(EMIOTTC0CLKI),
-  .EMIOTTC1CLKI(EMIOTTC1CLKI),
-  .EMIOUART0CTSN(EMIOUART0CTSN),
-  .EMIOUART0DCDN(EMIOUART0DCDN),
-  .EMIOUART0DSRN(EMIOUART0DSRN),
-  .EMIOUART0RIN(EMIOUART0RIN),
-  .EMIOUART0RX(EMIOUART0RX),
-  .EMIOUART1CTSN(EMIOUART1CTSN),
-  .EMIOUART1DCDN(EMIOUART1DCDN),
-  .EMIOUART1DSRN(EMIOUART1DSRN),
-  .EMIOUART1RIN(EMIOUART1RIN),
-  .EMIOUART1RX(EMIOUART1RX),
+  .EMIOTTC0CLKI(ttc0_CLK),
+  .EMIOTTC1CLKI(ttc1_CLK),
+  .EMIOUART0CTSN(uart0.CTSN),
+  .EMIOUART0DCDN(uart0.DCDN),
+  .EMIOUART0DSRN(uart0.DSRN),
+  .EMIOUART0RIN(uart0.RIN),
+  .EMIOUART0RX(uart0.RX),
+  .EMIOUART1CTSN(uart1.CTSN),
+  .EMIOUART1DCDN(uart1.DCDN),
+  .EMIOUART1DSRN(uart1.DSRN),
+  .EMIOUART1RIN(uart1.RIN),
+  .EMIOUART1RX(uart1.RX),
   .EMIOUSB0VBUSPWRFAULT(EMIOUSB0VBUSPWRFAULT),
   .EMIOUSB1VBUSPWRFAULT(EMIOUSB1VBUSPWRFAULT),
   .EMIOWDTCLKI(EMIOWDTCLKI),
   .EVENTEVENTI(EVENTEVENTI),
-  .FCLKCLKTRIGN(FCLKCLKTRIGN),
+  .FCLKCLKTRIGN(fclk_CLKTRIGN),
   .FPGAIDLEN(FPGAIDLEN),
-  .FTMDTRACEINATID(FTMDTRACEINATID),
-  .FTMDTRACEINCLOCK(FTMDTRACEINCLOCK),
-  .FTMDTRACEINDATA(FTMDTRACEINDATA),
-  .FTMDTRACEINVALID(FTMDTRACEINVALID),
-  .FTMTF2PDEBUG(FTMTF2PDEBUG),
-  .FTMTF2PTRIG(FTMTF2PTRIG),
-  .FTMTP2FTRIGACK(FTMTP2FTRIGACK),
+  .FTMDTRACEINATID(ftm_trace.ATID),
+  .FTMDTRACEINCLOCK(ftm_trace.CLOCK),
+  .FTMDTRACEINDATA(ftm_trace.DATA),
+  .FTMDTRACEINVALID(ftm_trace.VALID),
+  .FTMTF2PDEBUG(ftm_debug_f2p),
+  .FTMTF2PTRIG(ftm_trigger.F2PTRIG),
+  .FTMTP2FTRIGACK(ftm_trigger.P2FTRIGACK),
   .IRQF2P(IRQF2P),
   .MAXIGP0ACLK(m_axi_gp0.ACLK),
   .MAXIGP0ARREADY(m_axi_gp0.ARREADY),
