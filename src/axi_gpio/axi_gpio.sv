@@ -1,7 +1,8 @@
 /**
 # AXI GPIO V2.0 #
 
-Replicates Xilinx's AXI GPIO V2.0 IP, based on publicly available spec sheet.
+Replicates Xilinx's AXI GPIO V2.0 IP, based on publicly available spec sheet. It 
+uses fewer resources than the Xilinx IP for all configurations.
 
 ## Features ##
 - AXI4-Lite Interface
@@ -31,25 +32,22 @@ Note: TOW is Toggle-On-Write, which toggles thte status of a bit when a value of
 
 ## Resource Usage ##
 
-| Dual Channel | Interrupts | GPIO Width | GPIO2 Width | Slices | FF  | LUTs |
-| ---          | ---        | ---        | ---         | ---    | --- | ---  |
-| 0            | 0          | 32         |  32         |        |     |      |
-| 0            | 0          | 16         |  32         |        |     |      |
-| 0            | 1          | 32         |  16         |        |     |      |
-| 0            | 1          | 32         |  32         |        |     |      |
-| 0            | 1          |  1         |   1         |        |     |      |
-| 1            | 0          | 32         |  32         |        |     |      |
-| 1            | 0          |  1         |   1         |        |     |      |
-| 1            | 0          |  5         |  28         |        |     |      |
-| 1            | 0          | 28         |   5         |        |     |      |
-| 1            | 1          | 32         |  32         |        |     |      |
-| 1            | 1          | 15         |  28         |        |     |      |
-| 1            | 1          |  1         |   1         |        |     |      |
-|              |            |            |             |        |     |      |
-|              |            |            |             |        |     |      |
-|              |            |            |             |        |     |      |
-|              |            |            |             |        |     |      |
+Approximate FF usage is:
+`3*C_GPIO_WIDTH + 3*C_GPIO2_WIDTH + 32 + 6 + 32*C_INTERRUPT_PRESENT*(1+C_IS_DUAL)`.
 
+| Dual Channel | Interrupts | GPIO Width | GPIO2 Width | FF  | LUTs |
+| ---          | ---        | ---        | ---         | --- | ---  |
+| 0            | 0          | 32         |  N/A        | 133 | 48   |
+| 0            | 0          | 16         |  N/A        | 70  | 28   |
+| 0            | 1          | 32         |  N/A        | 171 | 73   |
+| 0            | 1          |  1         |  N/A        | 19  | 27   |
+| 1            | 0          | 32         |  32         | 229 | 87   |
+| 1            | 0          |  1         |   1         | 12  | 13   |
+| 1            | 0          |  5         |  28         | 132 | 52   |
+| 1            | 0          | 28         |   5         | 132 | 51   |
+| 1            | 1          | 32         |  32         | 299 | 109  |
+| 1            | 1          | 15         |  28         | 212 | 92   |
+| 1            | 1          |  1         |   1         | 22  | 28   |
 
 */
 
