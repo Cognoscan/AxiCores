@@ -132,7 +132,7 @@ end
 /**************************************************************************/
 // Write Channel
 /**************************************************************************/
-assign write_strobe = s_axi.AWVALID && s_axi.WVALID && !(s_axi.BVALID && !s_axi.BREADY);
+assign write_strobe = s_axi.AWVALID && s_axi.WVALID && !s_axi.BVALID;
 
 assign s_axi.BRESP = 2'b00; // Always respond with RESP_OKAY
 
@@ -364,7 +364,7 @@ end
 // Read Channel
 /**************************************************************************/
 
-assign read_strobe = s_axi.ARVALID && !(s_axi.RVALID && !s_axi.RREADY);
+assign read_strobe = s_axi.ARVALID && !s_axi.RVALID;
 
 assign s_axi.RRESP = 2'b00; // Always respond with RESP_OKAY
 

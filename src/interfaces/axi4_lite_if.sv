@@ -137,6 +137,10 @@ Using a given address and random data, write & read...
 
 */
 
+// Maximum number of clocks a bus transaction can take before the transaction is 
+// considered to have failed. This is only for testing purposes.
+localparam BUS_TIMEOUT = 32;
+
 /**************************************************************************/
 // Initialize Master Bus
 /**************************************************************************/
@@ -169,6 +173,7 @@ task Write (
 integer i;
 
 begin
+    // Setup
     @(posedge ACLK)
     AWADDR = address;
     AWPROT = 3'b000;
@@ -176,31 +181,22 @@ begin
     WDATA = data;
     WSTRB = strobes;
     WVALID = 1'b1;
+    BREADY = 1'b0;
     success = 1'b1;
-    fork : timeoutBlock
-        begin
-            i = 0;
-            while (i < 32) #1 @(posedge ACLK) i++;
-            success = 1'b0;
-            $display("AXI Write Timeout");
-        end
-        begin
-            fork
-                begin
-                    wait(AWREADY);
-                    @(posedge ACLK) AWVALID = 1'b0;
-                end
-                begin
-                    wait(WREADY);
-                    @(posedge ACLK) WVALID = 1'b0;
-                end
-            join
-            wait(BVALID);
-            @(posedge ACLK) BREADY = 1'b1;
+    i = 0;
+    // Transaction
+    while (i < BUS_TIMEOUT) begin
+        #1 @(posedge ACLK) i++;
+        if (AWREADY) AWVALID = 1'b0;
+        if (WREADY) WVALID = 1'b0;
+        if (BVALID) begin
+            BREADY = 1'b1;
             @(posedge ACLK) BREADY = 1'b0;
+            break;
         end
-    join_any
-    disable timeoutBlock;
+    end
+    // Cleanup
+    if (i == BUS_TIMEOUT) success = 1'b0;
     AWVALID = 1'b0;
     WVALID = 1'b0;
     BREADY = 1'b0;
@@ -219,28 +215,27 @@ task Read (
 integer i;
 
 begin
+    // Setup
     @(posedge ACLK)
     ARADDR = address;
     ARPROT = 3'b000;
     ARVALID = 1'b1;
     success = 1'b1;
-    fork : timeoutBlock
-        begin
-            i = 0;
-            while (i < 32) #1 @(posedge ACLK) i++;
-            success = 1'b0;
-            $display("AXI Read Timeout");
-        end
-        begin
-            wait(ARREADY);
-            @(posedge ACLK) ARVALID = 1'b0;
-            wait(RVALID);
-            @(posedge ACLK) RREADY = 1'b1;
+    data = 32'h0;
+    i = 0;
+    // Transaction
+    while (i < BUS_TIMEOUT) begin
+        #1 @(posedge ACLK) i++;
+        if (ARREADY) ARVALID = 1'b0;
+        if (RVALID) begin
+            RREADY = 1'b1;
+            data = RDATA;
             @(posedge ACLK) RREADY = 1'b0;
+            break;
         end
-    join_any
-    disable timeoutBlock;
-    data = RDATA;
+    end
+    // Cleanup
+    if (i == BUS_TIMEOUT) success = 1'b0;
     ARVALID = 1'b0;
     RREADY = 1'b0;
 end
