@@ -15,11 +15,12 @@ offered by Xilinx.
 
 ## ARCH Parameter Values ##
 
-| ARCH         | Architecture              |
-| ---          | ---                       |
-| XIL_SPARTAN6 | Xilinx Spartan 6 series   |
-| XIL_VIRTEX6  | Xilinx Virtex 6 series    |
-| XIL_7SERIES  | Xilinx 7 series parts |
+| ARCH         | Architecture            |
+| ---          | ---                     |
+| GENERIC      | Any device              |
+| XIL_SPARTAN6 | Xilinx Spartan 6 series |
+| XIL_VIRTEX6  | Xilinx Virtex 6 series  |
+| XIL_7SERIES  | Xilinx 7 series parts   |
 
 ## Important Note on Resets ##
 
