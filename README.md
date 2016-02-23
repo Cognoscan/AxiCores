@@ -16,7 +16,7 @@ offered by Xilinx.
 ## ARCH Parameter Values ##
 
 | ARCH         | Architecture              |
-| --           | --                        |
+| ---          | ---                       |
 | XIL_SPARTAN6 | Xilinx Spartan 6 series   |
 | XIL_VIRTEX6  | Xilinx Virtex 6 series    |
 | XIL_7SERIES  | Xilinx All 7 series parts |
