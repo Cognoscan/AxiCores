@@ -29,6 +29,28 @@ Implements a 32-bit AXI4-Lite slave.
 Note: TOW is Toggle-On-Write, which toggles thte status of a bit when a value of 
 1 is written to it.
 
+## Resource Usage ##
+
+| Dual Channel | Interrupts | GPIO Width | GPIO2 Width | Slices | FF  | LUTs |
+| ---          | ---        | ---        | ---         | ---    | --- | ---  |
+| 0            | 0          | 32         |  32         |        |     |      |
+| 0            | 0          | 16         |  32         |        |     |      |
+| 0            | 1          | 32         |  16         |        |     |      |
+| 0            | 1          | 32         |  32         |        |     |      |
+| 0            | 1          |  1         |   1         |        |     |      |
+| 1            | 0          | 32         |  32         |        |     |      |
+| 1            | 0          |  1         |   1         |        |     |      |
+| 1            | 0          |  5         |  28         |        |     |      |
+| 1            | 0          | 28         |   5         |        |     |      |
+| 1            | 1          | 32         |  32         |        |     |      |
+| 1            | 1          | 15         |  28         |        |     |      |
+| 1            | 1          |  1         |   1         |        |     |      |
+|              |            |            |             |        |     |      |
+|              |            |            |             |        |     |      |
+|              |            |            |             |        |     |      |
+|              |            |            |             |        |     |      |
+
+
 */
 
 module axi_gpio
@@ -74,15 +96,27 @@ localparam GPIO2_IO_HIGH_1 = (C_GPIO2_WIDTH > 16) ? 15 : C_GPIO2_WIDTH-1;
 localparam GPIO2_IO_HIGH_2 = (C_GPIO2_WIDTH > 24) ? 23 : C_GPIO2_WIDTH-1;
 localparam GPIO2_IO_HIGH_3 = (C_GPIO2_WIDTH > 32) ? 31 : C_GPIO2_WIDTH-1;
 
-logic [31:0] global_int_en;
-logic [31:0] ip_int_en;
-logic [31:0] ip_int_status;
+logic [C_GPIO_WIDTH-1:0]  gpio_io_i_reg;
+logic [C_GPIO2_WIDTH-1:0] gpio2_io_i_reg;
+logic [C_GPIO_WIDTH-1:0]  gpio_io_i_reg2;
+logic [C_GPIO2_WIDTH-1:0] gpio2_io_i_reg2;
+
+logic global_int_en;
+logic [1:0] ip_int_en;
+logic [1:0] ip_int_status;
 
 logic clk;
 logic rst; // Active high
 logic write_strobe;
 logic read_strobe;
 
+logic wr_reg_gpio_io;
+logic wr_reg_gpio_io_t;
+logic wr_reg_gpio2_io;
+logic wr_reg_gpio2_io_t;
+logic wr_reg_global_int_en;
+logic wr_reg_ip_int_en;
+logic wr_reg_ip_int_status;
 
 // Sanity Check of Parameters
 // {{{
@@ -134,6 +168,15 @@ end
 /**************************************************************************/
 assign write_strobe = s_axi.AWVALID && s_axi.WVALID && !s_axi.BVALID;
 
+// Address decode logic
+assign wr_reg_gpio_io       = (s_axi.AWADDR == REG_GPIO_IO      );
+assign wr_reg_gpio_io_t     = (s_axi.AWADDR == REG_GPIO_IO_T    );
+assign wr_reg_gpio2_io      = (s_axi.AWADDR == REG_GPIO2_IO     );
+assign wr_reg_gpio2_io_t    = (s_axi.AWADDR == REG_GPIO2_IO_T   );
+assign wr_reg_global_int_en = (s_axi.AWADDR == REG_GLOBAL_INT_EN);
+assign wr_reg_ip_int_en     = (s_axi.AWADDR == REG_IP_INT_EN    );
+assign wr_reg_ip_int_status = (s_axi.AWADDR == REG_IP_INT_STATUS);
+
 assign s_axi.BRESP = 2'b00; // Always respond with RESP_OKAY
 
 // 0x00 - Channel 1 gpio data
@@ -142,7 +185,7 @@ if (!C_ALL_INPUTS) begin
         always_ff @(posedge clk) begin
             if (rst)
                 gpio_io_o[GPIO_IO_HIGH_0:0] <= C_DOUT_DEFAULT[GPIO_IO_HIGH_0:0];
-            else if (write_strobe && (REG_GPIO_IO   == s_axi.AWADDR) && s_axi.WSTRB[0])
+            else if (write_strobe && wr_reg_gpio_io && s_axi.WSTRB[0])
                 gpio_io_o[GPIO_IO_HIGH_0:0] <= s_axi.WDATA[GPIO_IO_HIGH_0:0];
         end
     end
@@ -153,7 +196,7 @@ if (!C_ALL_INPUTS) begin
         always_ff @(posedge clk) begin
             if (rst)
                 gpio_io_o[GPIO_IO_HIGH_1:8] <= C_DOUT_DEFAULT[GPIO_IO_HIGH_1:8];
-            else if (write_strobe && (REG_GPIO_IO   == s_axi.AWADDR) && s_axi.WSTRB[1])
+            else if (write_strobe && wr_reg_gpio_io && s_axi.WSTRB[1])
                 gpio_io_o[GPIO_IO_HIGH_1:8] <= s_axi.WDATA[GPIO_IO_HIGH_1:8];
         end
     end
@@ -164,7 +207,7 @@ if (!C_ALL_INPUTS) begin
         always_ff @(posedge clk) begin
             if (rst)
                 gpio_io_o[GPIO_IO_HIGH_2:16] <= C_DOUT_DEFAULT[GPIO_IO_HIGH_2:16];
-            else if (write_strobe && (REG_GPIO_IO   == s_axi.AWADDR) && s_axi.WSTRB[2])
+            else if (write_strobe && wr_reg_gpio_io && s_axi.WSTRB[2])
                 gpio_io_o[GPIO_IO_HIGH_2:16] <= s_axi.WDATA[GPIO_IO_HIGH_2:16];
         end
     end
@@ -175,7 +218,7 @@ if (!C_ALL_INPUTS) begin
         always_ff @(posedge clk) begin
             if (rst)
                 gpio_io_o[GPIO_IO_HIGH_3:24] <= C_DOUT_DEFAULT[GPIO_IO_HIGH_3:24];
-            else if (write_strobe && (REG_GPIO_IO   == s_axi.AWADDR) && s_axi.WSTRB[3])
+            else if (write_strobe && wr_reg_gpio_io && s_axi.WSTRB[3])
                 gpio_io_o[GPIO_IO_HIGH_3:24] <= s_axi.WDATA[GPIO_IO_HIGH_3:24];
         end
     end
@@ -193,7 +236,7 @@ if (!C_ALL_INPUTS && !C_ALL_OUTPUTS) begin
         always_ff @(posedge clk) begin
             if (rst)
                 gpio_io_t[GPIO_IO_HIGH_0:0] <= C_DOUT_DEFAULT[GPIO_IO_HIGH_0:0];
-            else if (write_strobe && (REG_GPIO_IO_T == s_axi.AWADDR) && s_axi.WSTRB[0])
+            else if (write_strobe && wr_reg_gpio_io_t && s_axi.WSTRB[0])
                 gpio_io_t[GPIO_IO_HIGH_0:0] <= s_axi.WDATA[GPIO_IO_HIGH_0:0];
         end
     end
@@ -204,7 +247,7 @@ if (!C_ALL_INPUTS && !C_ALL_OUTPUTS) begin
         always_ff @(posedge clk) begin
             if (rst)
                 gpio_io_t[GPIO_IO_HIGH_1:8] <= C_DOUT_DEFAULT[GPIO_IO_HIGH_1:8];
-            else if (write_strobe && (REG_GPIO_IO_T == s_axi.AWADDR) && s_axi.WSTRB[1])
+            else if (write_strobe && wr_reg_gpio_io_t && s_axi.WSTRB[1])
                 gpio_io_t[GPIO_IO_HIGH_1:8] <= s_axi.WDATA[GPIO_IO_HIGH_1:8];
         end
     end
@@ -215,7 +258,7 @@ if (!C_ALL_INPUTS && !C_ALL_OUTPUTS) begin
         always_ff @(posedge clk) begin
             if (rst)
                 gpio_io_t[GPIO_IO_HIGH_2:16] <= C_DOUT_DEFAULT[GPIO_IO_HIGH_2:16];
-            else if (write_strobe && (REG_GPIO_IO_T == s_axi.AWADDR) && s_axi.WSTRB[2])
+            else if (write_strobe && wr_reg_gpio_io_t && s_axi.WSTRB[2])
                 gpio_io_t[GPIO_IO_HIGH_2:16] <= s_axi.WDATA[GPIO_IO_HIGH_2:16];
         end
     end
@@ -226,7 +269,7 @@ if (!C_ALL_INPUTS && !C_ALL_OUTPUTS) begin
         always_ff @(posedge clk) begin
             if (rst)
                 gpio_io_t[GPIO_IO_HIGH_3:24] <= C_DOUT_DEFAULT[GPIO_IO_HIGH_3:24];
-            else if (write_strobe && (REG_GPIO_IO_T == s_axi.AWADDR) && s_axi.WSTRB[3])
+            else if (write_strobe && wr_reg_gpio_io_t && s_axi.WSTRB[3])
                 gpio_io_t[GPIO_IO_HIGH_3:24] <= s_axi.WDATA[GPIO_IO_HIGH_3:24];
         end
     end
@@ -244,7 +287,7 @@ if (!C_ALL_INPUTS) begin
         always_ff @(posedge clk) begin
             if (rst)
                 gpio2_io_o[GPIO2_IO_HIGH_0:0] <= C_DOUT_DEFAULT[GPIO2_IO_HIGH_0:0];
-            else if (write_strobe && (REG_GPIO2_IO   == s_axi.AWADDR) && s_axi.WSTRB[0])
+            else if (write_strobe && wr_reg_gpio2_io && s_axi.WSTRB[0])
                 gpio2_io_o[GPIO2_IO_HIGH_0:0] <= s_axi.WDATA[GPIO2_IO_HIGH_0:0];
         end
     end
@@ -255,7 +298,7 @@ if (!C_ALL_INPUTS) begin
         always_ff @(posedge clk) begin
             if (rst)
                 gpio2_io_o[GPIO2_IO_HIGH_1:8] <= C_DOUT_DEFAULT[GPIO2_IO_HIGH_1:8];
-            else if (write_strobe && (REG_GPIO2_IO   == s_axi.AWADDR) && s_axi.WSTRB[1])
+            else if (write_strobe && wr_reg_gpio2_io && s_axi.WSTRB[1])
                 gpio2_io_o[GPIO2_IO_HIGH_1:8] <= s_axi.WDATA[GPIO2_IO_HIGH_1:8];
         end
     end
@@ -266,7 +309,7 @@ if (!C_ALL_INPUTS) begin
         always_ff @(posedge clk) begin
             if (rst)
                 gpio2_io_o[GPIO2_IO_HIGH_2:16] <= C_DOUT_DEFAULT[GPIO2_IO_HIGH_2:16];
-            else if (write_strobe && (REG_GPIO2_IO   == s_axi.AWADDR) && s_axi.WSTRB[2])
+            else if (write_strobe && wr_reg_gpio2_io && s_axi.WSTRB[2])
                 gpio2_io_o[GPIO2_IO_HIGH_2:16] <= s_axi.WDATA[GPIO2_IO_HIGH_2:16];
         end
     end
@@ -277,7 +320,7 @@ if (!C_ALL_INPUTS) begin
         always_ff @(posedge clk) begin
             if (rst)
                 gpio2_io_o[GPIO2_IO_HIGH_3:24] <= C_DOUT_DEFAULT[GPIO2_IO_HIGH_3:24];
-            else if (write_strobe && (REG_GPIO2_IO   == s_axi.AWADDR) && s_axi.WSTRB[3])
+            else if (write_strobe && wr_reg_gpio2_io && s_axi.WSTRB[3])
                 gpio2_io_o[GPIO2_IO_HIGH_3:24] <= s_axi.WDATA[GPIO2_IO_HIGH_3:24];
         end
     end
@@ -295,7 +338,7 @@ if (!C_ALL_INPUTS_2 && !C_ALL_OUTPUTS_2) begin
         always_ff @(posedge clk) begin
             if (rst)
                 gpio2_io_t[GPIO2_IO_HIGH_0:0] <= C_DOUT_DEFAULT[GPIO2_IO_HIGH_0:0];
-            else if (write_strobe && (REG_GPIO2_IO_T == s_axi.AWADDR) && s_axi.WSTRB[0])
+            else if (write_strobe && wr_reg_gpio2_io_t && s_axi.WSTRB[0])
                 gpio2_io_t[GPIO2_IO_HIGH_0:0] <= s_axi.WDATA[GPIO2_IO_HIGH_0:0];
         end
     end
@@ -306,7 +349,7 @@ if (!C_ALL_INPUTS_2 && !C_ALL_OUTPUTS_2) begin
         always_ff @(posedge clk) begin
             if (rst)
                 gpio2_io_t[GPIO2_IO_HIGH_1:8] <= C_DOUT_DEFAULT[GPIO2_IO_HIGH_1:8];
-            else if (write_strobe && (REG_GPIO2_IO_T == s_axi.AWADDR) && s_axi.WSTRB[1])
+            else if (write_strobe && wr_reg_gpio2_io_t && s_axi.WSTRB[1])
                 gpio2_io_t[GPIO2_IO_HIGH_1:8] <= s_axi.WDATA[GPIO2_IO_HIGH_1:8];
         end
     end
@@ -317,7 +360,7 @@ if (!C_ALL_INPUTS_2 && !C_ALL_OUTPUTS_2) begin
         always_ff @(posedge clk) begin
             if (rst)
                 gpio2_io_t[GPIO2_IO_HIGH_2:16] <= C_DOUT_DEFAULT[GPIO2_IO_HIGH_2:16];
-            else if (write_strobe && (REG_GPIO2_IO_T == s_axi.AWADDR) && s_axi.WSTRB[2])
+            else if (write_strobe && wr_reg_gpio2_io_t && s_axi.WSTRB[2])
                 gpio2_io_t[GPIO2_IO_HIGH_2:16] <= s_axi.WDATA[GPIO2_IO_HIGH_2:16];
         end
     end
@@ -328,7 +371,7 @@ if (!C_ALL_INPUTS_2 && !C_ALL_OUTPUTS_2) begin
         always_ff @(posedge clk) begin
             if (rst)
                 gpio2_io_t[GPIO2_IO_HIGH_3:24] <= C_DOUT_DEFAULT[GPIO2_IO_HIGH_3:24];
-            else if (write_strobe && (REG_GPIO2_IO_T == s_axi.AWADDR) && s_axi.WSTRB[3])
+            else if (write_strobe && wr_reg_gpio2_io_t && s_axi.WSTRB[3])
                 gpio2_io_t[GPIO2_IO_HIGH_3:24] <= s_axi.WDATA[GPIO2_IO_HIGH_3:24];
         end
     end
@@ -338,6 +381,24 @@ if (!C_ALL_INPUTS_2 && !C_ALL_OUTPUTS_2) begin
 end
 else begin
     assign gpio2_io_t = C_TRI_DEFAULT;
+end
+
+if (C_INTERRUPT_PRESENT) begin
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            global_int_en <= 1'b0;
+            ip_int_en <= 2'b00;
+        end
+        else if (write_strobe) begin
+            if (wr_reg_global_int_en && s_axi.WSTRB[3]) global_int_en <= s_axi.WDATA[31];
+            if (wr_reg_ip_int_en && s_axi.WSTRB[0]) ip_int_en <= s_axi.WDATA[1:0];
+            // ip_int_status is handled in the Interrupt Logic
+        end
+    end
+end
+else begin
+    assign global_int_en = 1'b0;
+    assign ip_int_en = 2'b00;
 end
 
 // AXI Write Channel Controls
@@ -361,6 +422,69 @@ always_ff @(posedge clk) begin
 end
 
 /**************************************************************************/
+// Register Inputs
+/**************************************************************************/
+
+if (!C_ALL_OUTPUTS) begin
+    always_ff @(posedge clk) begin
+        gpio_io_i_reg  <= gpio_io_i;
+    end
+end
+else begin
+    assign gpio_io_i_reg = '0;
+end
+if (C_IS_DUAL && !C_ALL_OUTPUTS_2) begin
+    always_ff @(posedge clk) begin
+        gpio2_io_i_reg <= gpio2_io_i;
+    end
+end
+else begin
+    assign gpio2_io_i_reg = '0;
+end
+
+/**************************************************************************/
+// Interrupt Logic
+/**************************************************************************/
+
+if (C_INTERRUPT_PRESENT) begin
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            gpio_io_i_reg2  <= '0;
+            gpio2_io_i_reg2 <= '0;
+            ip_int_status   <= '0;
+            ip2intc_irpt    <= 1'b0;
+        end
+        else begin
+            // GPIO 1
+            gpio_io_i_reg2  <= gpio_io_i_reg;
+            if (gpio_io_i_reg != gpio_io_i_reg2) begin
+                ip_int_status[0] <= 1'b1;
+            end
+            else if (write_strobe && wr_reg_ip_int_status && s_axi.WSTRB[0]) begin
+                ip_int_status[0] <= s_axi.WDATA[0] ^ ip_int_status[0];
+            end
+            // GPIO 2
+            gpio2_io_i_reg2 <= gpio2_io_i_reg;
+            if (gpio2_io_i_reg != gpio2_io_i_reg2) begin
+                ip_int_status[1] <= 1'b1;
+            end
+            else if (write_strobe && wr_reg_ip_int_status && s_axi.WSTRB[0]) begin
+                ip_int_status[1] <= s_axi.WDATA[1] ^ ip_int_status[1];
+            end
+            // Interrupt Output
+            ip2intc_irpt <= |ip_int_status[1:0];
+        end
+    end
+end
+else begin
+    assign ip2intc_irpt = 1'b0;
+    assign ip_int_status = 2'b00;
+    assign gpio_io_i_reg2 = '0;
+    assign gpio2_io_i_reg2 = '0;
+end
+
+
+/**************************************************************************/
 // Read Channel
 /**************************************************************************/
 
@@ -377,14 +501,15 @@ always_ff @(posedge clk) begin
     else begin
         s_axi.ARREADY <= read_strobe;
         if (read_strobe) begin
+            s_axi.RDATA <= 32'd0; // Unused bits should default to 0
             unique case ({s_axi.ARADDR[8:2],2'b00})
-                REG_GPIO_IO       : s_axi.RDATA <= gpio_io_i;     // Channel 1 gpio data
-                REG_GPIO_IO_T     : s_axi.RDATA <= gpio_io_t;     // Channel 1 gpio tri-state control
-                REG_GPIO2_IO      : s_axi.RDATA <= gpio2_io_i;    // Channel 2 gpio data
-                REG_GPIO2_IO_T    : s_axi.RDATA <= gpio2_io_t;    // Channel 2 gpio tri-state control
-                REG_GLOBAL_INT_EN : s_axi.RDATA <= global_int_en; // Global interrupt enables
-                REG_IP_INT_EN     : s_axi.RDATA <= ip_int_en;     // IP interrupt enables
-                REG_IP_INT_STATUS : s_axi.RDATA <= ip_int_status; // IP interrupt status
+                REG_GPIO_IO       : s_axi.RDATA <= gpio_io_i_reg;          // Channel 1 gpio data
+                REG_GPIO_IO_T     : s_axi.RDATA <= gpio_io_t;              // Channel 1 gpio tri-state control
+                REG_GPIO2_IO      : s_axi.RDATA <= gpio2_io_i_reg;         // Channel 2 gpio data
+                REG_GPIO2_IO_T    : s_axi.RDATA <= gpio2_io_t;             // Channel 2 gpio tri-state control
+                REG_GLOBAL_INT_EN : s_axi.RDATA <= {global_int_en, 30'd0}; // Global interrupt enable
+                REG_IP_INT_EN     : s_axi.RDATA <= {30'd0, ip_int_en};     // IP interrupt enables
+                REG_IP_INT_STATUS : s_axi.RDATA <= {30'd0, ip_int_status}; // IP interrupt status
                 default : s_axi.RDATA <= 32'd0;         // Default of 0
             endcase
         end

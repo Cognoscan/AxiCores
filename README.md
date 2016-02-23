@@ -19,7 +19,7 @@ offered by Xilinx.
 | ---          | ---                       |
 | XIL_SPARTAN6 | Xilinx Spartan 6 series   |
 | XIL_VIRTEX6  | Xilinx Virtex 6 series    |
-| XIL_7SERIES  | Xilinx All 7 series parts |
+| XIL_7SERIES  | Xilinx 7 series parts |
 
 ## Important Note on Resets ##
 
