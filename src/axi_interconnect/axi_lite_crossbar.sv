@@ -8,13 +8,15 @@ signals must have the same source.
 
 module axi_lite_crossbar
 #(
-    parameter NUM_MASTERS = 1,
-    parameter NUM_SLAVES = 2,
-    parameter [15:0] S_BASE_ID [NUM_SLAVES-1:0] = {16'h4000, 16'h5000}
+    parameter NUM_MI = 1, ///< Number of master interfaces
+    parameter NUM_SI = 2, ///< Number of slave interfaces
+    parameter ADDR_WIDTH = 16, ///< Width of address bus
+    parameter SI_ADDR_WIDTH = 12, ///< Width of slave address bus
+    parameter [ADDR_WIDTH-1:0] S_BASE_ADDR [0:NUM_SI-1] = {16'h4000, 16'h5000} ///< Base address of each slave
 )    
 (
-    axi4_lite_if.master m_axi [NUM_MASTERS-1:0],
-    axi4_lite_if.slave s_axi [NUM_SLAVES-1:0]
+    axi4_lite_if.master m_axi [NUM_MI-1:0],
+    axi4_lite_if.slave s_axi [NUM_SI-1:0]
 );
 
 genvar i;
@@ -22,12 +24,12 @@ genvar i;
 // Sanity Check of Parameters
 // {{{
 initial begin
-    if (!(NUM_MASTERS inside {0, 1})) begin
-        $display("Attribute Syntax Error : The Attribute NUM_MASTERS on axi_lite_crossbar instance %m is set to %d.  This must be set to 1", NUM_MASTERS);
+    if (!(NUM_MI inside {0, 1})) begin
+        $display("Attribute Syntax Error : The Attribute NUM_MI on axi_lite_crossbar instance %m is set to %d.  This must be set to 1", NUM_MI);
         $finish();
     end
-    if (!(NUM_SLAVES inside {1, 8})) begin
-        $display("Attribute Syntax Error : The Attribute NUM_SLAVES on axi_lite_crossbar instance %m is set to %d.  Legal values are 1 to 8.", NUM_SLAVES);
+    if (!(NUM_SI inside {1, 8})) begin
+        $display("Attribute Syntax Error : The Attribute NUM_SI on axi_lite_crossbar instance %m is set to %d.  Legal values are 1 to 8.", NUM_SI);
         $finish();
     end
 end
@@ -35,7 +37,7 @@ end
 
 generate
 
-for (i = 0; i<NUM_SLAVES; i++) begin
+for (i = 0; i<NUM_SI; i++) begin
     assign s_axi[i].AWADDR  = '0;
     assign s_axi[i].AWPROT  = '0;
     assign s_axi[i].AWVALID = '0;

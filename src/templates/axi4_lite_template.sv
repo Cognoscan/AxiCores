@@ -33,6 +33,9 @@ Assuming all registers are 32 bits wide, we get
 */
 
 module axi4_lite_template
+#(
+    parameter ADDR_WIDTH = 8 ///< Must match s_axi.ADDR_WIDTH
+)
 (
     axi4_lite_if.slave s_axi ///< AXI4-Lite slave interface
 );
@@ -44,13 +47,12 @@ module axi4_lite_template
 localparam REG_REG0 = 'h00;
 localparam REG_REG1 = 'h04;
 
-localparam ADDR_WIDTH = s_axi.ADDR_WIDTH;
-
 /**************************************************************************/
 // Signal Declarations
 /**************************************************************************/
 
 logic [ADDR_WIDTH-1:0] w_addr;
+logic [ADDR_WIDTH-1:0] r_addr;
 
 logic [31:0] reg0;
 logic [31:0] reg1;
@@ -62,6 +64,18 @@ logic read_strobe;
 
 logic write_reg0;
 logic write_reg1;
+
+/**************************************************************************/
+// Parameter Checking
+/**************************************************************************/
+
+initial begin
+    if (ADDR_WIDTH != s_axi.ADDR_WIDTH) begin
+        $display("AXI Parameter Error: Module %m has ADDR_WIDTH=%d, but AXI ADDR_WIDTH=%d. They must be equal.",
+            ADDR_WIDTH, s_axi.ADDR_WIDTH);
+        $finish();
+    end
+end
 
 /**************************************************************************/
 // Clock & Reset Logic
@@ -135,6 +149,8 @@ assign read_strobe = s_axi.ARVALID && !s_axi.RVALID;
 
 assign s_axi.RRESP = 2'b00; // Always respond with RESP_OKAY
 
+assign r_addr = {s_axi.ARADDR[ADDR_WIDTH-1:2], 2'b00};
+
 always_ff @(posedge clk) begin
     if (rst) begin
         s_axi.ARREADY <= '0;
@@ -144,7 +160,7 @@ always_ff @(posedge clk) begin
     else begin
         s_axi.ARREADY <= read_strobe;
         if (read_strobe) begin
-            unique case ({s_axi.ARADDR[8:2],2'b00})
+            unique case (r_addr)
                 REG_REG0 : s_axi.RDATA <= reg0;
                 REG_REG1 : s_axi.RDATA <= reg1;
                 default  : s_axi.RDATA <= 'h0;

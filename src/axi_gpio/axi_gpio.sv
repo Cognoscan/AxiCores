@@ -94,6 +94,9 @@ localparam GPIO2_IO_HIGH_1 = (C_GPIO2_WIDTH > 16) ? 15 : C_GPIO2_WIDTH-1;
 localparam GPIO2_IO_HIGH_2 = (C_GPIO2_WIDTH > 24) ? 23 : C_GPIO2_WIDTH-1;
 localparam GPIO2_IO_HIGH_3 = (C_GPIO2_WIDTH > 32) ? 31 : C_GPIO2_WIDTH-1;
 
+logic [8:0] awaddr;
+logic [8:0] araddr;
+
 logic [C_GPIO_WIDTH-1:0]  gpio_io_i_reg;
 logic [C_GPIO2_WIDTH-1:0] gpio2_io_i_reg;
 logic [C_GPIO_WIDTH-1:0]  gpio_io_i_reg2;
@@ -151,6 +154,10 @@ initial begin
         $display("Attribute Syntax Error : The Attribute C_INTERRUPT_PRESENT on axi_gpio instance %m is set to %d.  Legal values for this attribute are 0 or 1", C_INTERRUPT_PRESENT);
         $finish();
     end
+    if (s_axi.ADDR_WIDTH < 9) begin
+        $display("AXI Parameter Error: The AXI4-Lit bus on axi_gpio instance %m only has %d address bits. At least 9 are required.", s_axi.ADDR_WIDTH);
+        $finish();
+    end
 end
 // }}}
 
@@ -167,13 +174,14 @@ end
 assign write_strobe = s_axi.AWVALID && s_axi.WVALID && !s_axi.BVALID;
 
 // Address decode logic
-assign wr_reg_gpio_io       = (s_axi.AWADDR == REG_GPIO_IO      );
-assign wr_reg_gpio_io_t     = (s_axi.AWADDR == REG_GPIO_IO_T    );
-assign wr_reg_gpio2_io      = (s_axi.AWADDR == REG_GPIO2_IO     );
-assign wr_reg_gpio2_io_t    = (s_axi.AWADDR == REG_GPIO2_IO_T   );
-assign wr_reg_global_int_en = (s_axi.AWADDR == REG_GLOBAL_INT_EN);
-assign wr_reg_ip_int_en     = (s_axi.AWADDR == REG_IP_INT_EN    );
-assign wr_reg_ip_int_status = (s_axi.AWADDR == REG_IP_INT_STATUS);
+assign awaddr = {s_axi.AWADDR[8:2], 2'b00};
+assign wr_reg_gpio_io       = (awaddr == REG_GPIO_IO      );
+assign wr_reg_gpio_io_t     = (awaddr == REG_GPIO_IO_T    );
+assign wr_reg_gpio2_io      = (awaddr == REG_GPIO2_IO     );
+assign wr_reg_gpio2_io_t    = (awaddr == REG_GPIO2_IO_T   );
+assign wr_reg_global_int_en = (awaddr == REG_GLOBAL_INT_EN);
+assign wr_reg_ip_int_en     = (awaddr == REG_IP_INT_EN    );
+assign wr_reg_ip_int_status = (awaddr == REG_IP_INT_STATUS);
 
 assign s_axi.BRESP = 2'b00; // Always respond with RESP_OKAY
 
@@ -450,6 +458,8 @@ assign read_strobe = s_axi.ARVALID && !s_axi.RVALID;
 
 assign s_axi.RRESP = 2'b00; // Always respond with RESP_OKAY
 
+assign araddr = {s_axi.ARADDR[8:2],2'b00};
+
 always_ff @(posedge clk) begin
     if (rst) begin
         s_axi.ARREADY <= '0;
@@ -460,7 +470,7 @@ always_ff @(posedge clk) begin
         s_axi.ARREADY <= read_strobe;
         if (read_strobe) begin
             s_axi.RDATA <= 32'd0; // Unused bits should default to 0
-            unique case ({s_axi.ARADDR[8:2],2'b00})
+            unique case (araddr)
                 REG_GPIO_IO       : s_axi.RDATA <= gpio_io_i_reg;          // Channel 1 gpio data
                 REG_GPIO_IO_T     : s_axi.RDATA <= gpio_io_t;              // Channel 1 gpio tri-state control
                 REG_GPIO2_IO      : s_axi.RDATA <= gpio2_io_i_reg;         // Channel 2 gpio data

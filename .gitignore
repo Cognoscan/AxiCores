@@ -12,6 +12,15 @@ xsim.dir/
 doc/html/
 doc/latex/
 
+# Ignore Vivado files
+.Xil/
+*.wdb
+vivado_*
+webtalk*
+xelab.*
+xsim*
+xvlog.*
+
 # Ignore Modelsim files
 work/
 vsim.wlf
