@@ -1,13 +1,13 @@
 
 # VIVADO Simulation Parameters
-#VLOG=xvlog
-#VFLAGS= --work work
-#SVFLAGS= --sv --work work
+VLOG=xvlog -work work -incr
+VFLAGS=
+SVFLAGS= -sv
 
 # MODELSIM Simulation Parameters
-VLOG=vlog
-VFLAGS= -work work
-SVFLAGS= -sv -work work
+#VLOG=vlog
+#VFLAGS= -work work
+#SVFLAGS= -sv -work work
 
 #Source directory
 SRCDIR   = ./src
