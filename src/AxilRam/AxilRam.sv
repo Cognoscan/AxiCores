@@ -20,6 +20,8 @@ module AxilRam #(
 (
     AxiLite.S bus
 );
+timeunit 1ns;
+timeprecision 10ps;
 
 /*****************************************************************************/
 // Parameter Declarations
@@ -36,7 +38,7 @@ logic invalidParams;
 initial begin
     invalidParams = 1'b0;
 
-    if (bus.ADDR_W < MEM_W) begin
+    if (bus.ADDR_W < (MEM_W+2)) begin
         $error("AxilRam: AxiLite bus address width is narrower than memory address width. Instance: %m");
         invalidParams = 1'b1;
     end
@@ -87,7 +89,7 @@ always @(posedge bus.aclk) begin
 
         // Register address
         if (bus.awValid && bus.awReady) begin
-            wAddr <= bus.awAddr;
+            wAddr <= bus.awAddr >> 2;
         end
         // Store data on write
         if (bus.wValid && bus.wReady) begin
@@ -126,7 +128,7 @@ always @(posedge bus.aclk) begin
 
         // Read data on valid address
         if (bus.arValid && bus.arReady) begin
-            bus.rData <= mem[bus.arAddr[MEM_W-1:0]];
+            bus.rData <= mem[bus.arAddr[MEM_W+1:2]];
         end
     end
 end

@@ -46,6 +46,8 @@ module AxilRam_wrapper #(
     output logic rValid,
     input  logic rReady
 );
+timeunit 1ns;
+timeprecision 10ps;
 
 AxiLite #(32) bus (aclk, aresetn);
 
