@@ -39,6 +39,8 @@ interface AxiStream
     input logic aclk,   ///< Global clock signal
     input logic aresetn ///< Global reset signal, active LOW
 );
+timeunit 1ns;
+timeprecision 10ps;
 
 // We can't have 0-sized signals, so make them 1 bit and assume nothing attached
 // to the bus will use the ID / USER signals.
