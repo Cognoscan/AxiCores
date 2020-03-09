@@ -27,6 +27,8 @@ interface AxiLite
     input logic aclk,   ///< Global clock signal
     input logic aresetn ///< Global reset signal, active LOW
 );
+timeunit 1ns;
+timeprecision 10ps;
 
 /**************************************************************************/
 // AXI4 Write Address Channel
@@ -133,5 +135,103 @@ modport S (
     output rValid,
     input  rReady
 );
+
+task MasterInit;
+begin
+    awAddr   = '0;
+    awProt   = '0;
+    awValid  = 1'b0;
+    wData    = '0;
+    wStrb    = '0;
+    wValid   = 1'b0;
+    bReady   = 1'b0;
+    arAddr   = '0;
+    arProt   = '0;
+    arValid  = 1'b0;
+    rReady   = 1'b0;
+end
+endtask
+
+task SlaveInit;
+begin
+    awReady = 1'b0;
+    wReady  = 1'b0;
+    bResp   = '0;
+    bValid  = 1'b0;
+    arReady = 1'b0;
+    rData   = '0;
+    rResp   = '0;
+    rValid  = 1'b0;
+end
+endtask
+
+task Write (
+    input longint addr,
+    input bit [31:0] data,
+    input bit [3:0] strb,
+    output bit success
+);
+bit awDone;
+bit wDone;
+bit bDone;
+begin
+    @(negedge aclk)
+    awAddr = addr;
+    awProt = '0;
+    awValid = 1'b1;
+    wData = data;
+    wStrb = strb;
+    wValid = 1'b1;
+    awDone = 1'b0;
+    wDone = 1'b0;
+    while (!awDone || !wDone) begin
+        awDone |= awReady;
+        wDone |= wReady;
+        @(negedge aclk)
+        awValid = ~awDone;
+        wValid = ~wDone;
+    end
+    bReady = 1'b1;
+    bDone = 1'b0;
+    while (!bDone) begin
+        bDone |= bValid;
+        if (bValid) success = (bResp[1] === 1'b0); // OKAY or EXOKAY
+        @(negedge aclk)
+        bReady = ~bDone;
+    end
+end
+endtask
+
+task Read (
+    input longint addr,
+    output bit [31:0] data,
+    output bit success
+);
+bit arDone;
+bit rDone;
+begin
+    @(negedge aclk) 
+    arAddr = addr;
+    arProt = '0;
+    arValid = 1'b1;
+    arDone = 1'b0;
+    while (!arDone) begin
+        arDone |= arReady;
+        @(negedge aclk)
+        arValid = ~arDone;
+    end
+    rReady = 1'b1;
+    rDone = 1'b0;
+    while (!rDone) begin
+        rDone |= rValid;
+        if (rValid) begin
+            data = rData;
+            success = (rResp[1] === 1'b0);
+        end
+        @(negedge aclk)
+        rReady = !rDone;
+    end
+end
+endtask
 
 endinterface
