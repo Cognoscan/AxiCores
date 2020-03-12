@@ -37,6 +37,7 @@ logic [3:0] testStrb;
 
 AxiLite #(ADDR_W) bus (clk, rstn);
 logic [31:0] ctrl [CTRL-1:0];
+logic [4*CTRL-1:0] writeCtrl;
 logic [31:0] stat [STAT-1:0];
 logic [INTERRUPTS-1:0] interrupts;
 logic irq;

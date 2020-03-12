@@ -15,8 +15,8 @@
 */
 
 module AxilCsr_wrapper #(
-    parameter CTRL           = 4, ///< Number of control registers
-    parameter STAT           = 4, ///< Number of status registers
+    parameter CTRL           = 3, ///< Number of control registers
+    parameter STAT           = 5, ///< Number of status registers
     parameter HAS_INTERRUPTS = 0, ///< Whether interrupts are present
     parameter INTERRUPTS     = 1  ///< Number of interrupts (up to 32)
 )
@@ -50,6 +50,7 @@ module AxilCsr_wrapper #(
     input  logic rReady,
     // Control, Status, Interrupts
     output logic [31:0] ctrl [CTRL-1:0],
+	output logic [4*CTRL-1:0] writeCtrl,
     input logic [31:0] stat [STAT-1:0],
     input logic [INTERRUPTS-1:0] interrupts,
     output logic irq

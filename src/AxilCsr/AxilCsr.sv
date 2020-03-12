@@ -23,6 +23,7 @@ module AxilCsr #(
 (
     AxiLite.S bus,
     output logic [31:0] ctrl [CTRL-1:0],
+	output logic [4*CTRL-1:0] writeCtrl,
     input logic [31:0] stat [STAT-1:0],
     input logic [INTERRUPTS-1:0] interrupts,
     output logic irq
@@ -99,6 +100,8 @@ logic rstn;
 logic [INTERRUPTS-1:0] irqEnable;
 logic [INTERRUPTS-1:0] irqStatus;
 
+logic [4*CTRL-1:0] writeCtrlRaw;
+logic [CTRL-1:0] writeReg;
 
 /*****************************************************************************/
 // Clock & Reset
@@ -117,6 +120,7 @@ initial begin
     bus.wReady = 1'b0;
     bus.bValid = 1'b0;
     wAddr = '0;
+	writeCtrl = '0;
     for (int i=0; i<CTRL; i++) begin
         ctrl[i] = '0;
     end
@@ -151,17 +155,22 @@ genvar g;
 // Control registers
 generate
 for (g=0; g<CTRL; g++) begin
+	assign writeReg[g] = bus.wValid && bus.wReady && (wAddr == g);
+	assign writeCtrlRaw[g*4+0] = writeReg[g] && bus.wStrb[0];
+	assign writeCtrlRaw[g*4+1] = writeReg[g] && bus.wStrb[1];
+	assign writeCtrlRaw[g*4+2] = writeReg[g] && bus.wStrb[2];
+	assign writeCtrlRaw[g*4+3] = writeReg[g] && bus.wStrb[3];
     always @(posedge clk) begin
         if (!rstn) begin
             ctrl[g] <= '0;
+			writeCtrl[g*4+:4] <= 1'b0;
         end
         else begin
-            if (bus.wValid && bus.wReady && (wAddr == g)) begin
-                if (bus.wStrb[0]) ctrl[g][ 7: 0] <= bus.wData[ 7: 0];
-                if (bus.wStrb[1]) ctrl[g][15: 8] <= bus.wData[15: 8];
-                if (bus.wStrb[2]) ctrl[g][23:16] <= bus.wData[23:16];
-                if (bus.wStrb[3]) ctrl[g][31:24] <= bus.wData[31:24];
-            end
+			if (writeCtrlRaw[g*4+0]) ctrl[g][ 7: 0] <= bus.wData[ 7: 0];
+            if (writeCtrlRaw[g*4+1]) ctrl[g][15: 8] <= bus.wData[15: 8];
+            if (writeCtrlRaw[g*4+2]) ctrl[g][23:16] <= bus.wData[23:16];
+            if (writeCtrlRaw[g*4+3]) ctrl[g][31:24] <= bus.wData[31:24];
+			writeCtrl[g*4+:4] <= writeCtrlRaw[g*4+:4];
         end
     end
 end
