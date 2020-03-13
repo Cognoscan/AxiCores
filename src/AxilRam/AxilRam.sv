@@ -44,7 +44,7 @@ initial begin
     end
 
     if (invalidParams) begin
-        $stop;
+        #1 $finish;
     end
 end
 
