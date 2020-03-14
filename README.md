@@ -8,6 +8,24 @@ additional parameter, ARCH, which will contain the name of the architecture
 used. A list of architecture names shall be maintained in top-level 
 documentation.
 
+## Simulation & Test Synthesis ##
+
+Simulation of any module can be run in Vivado using `./simulate.sh unit_tb`, 
+where unit_tb is replaced with the testbench name.
+
+Synthesis can be tested by running Vivado with the `-mode tcl` argument and 
+executing the following commands:
+
+```
+add_files ./src
+synth_design -mode out_of_context -part xc7a35ticsg324-1l -top unit_wrapper
+report_utilization
+```
+
+The `unit_wrapper` should be replaced with the appropriate wrapper. 
+Parameterized wrappers that break out all interfaces are recommended, so that 
+all parameters can be set for synthesis.
+
 ## ARCH Parameter Values ##
 
 | ARCH         | Architecture            |
