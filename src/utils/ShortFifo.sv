@@ -57,7 +57,7 @@ logic addrZero;
 logic addrMax;
 logic localRstn;
 
-enum { ST_EMPTY, ST_OUT, ST_SRL, ST_BOTH } state;
+(* fsm_encoding = "sequential" *) enum { ST_EMPTY, ST_SRL, ST_OUT, ST_BOTH } state;
 
 /*****************************************************************************/
 // State Machine
